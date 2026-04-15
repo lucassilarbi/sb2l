@@ -10,6 +10,10 @@ Install prerequisites:
 
 ```apt-get install cmake libgmp-dev python2.7 flex bison gcc g++ make pkg-config libfuse2```
 
+Update git submodules:
+
+```git submodule update --init --recursive```
+
 Install SB2L:
 
 ```
