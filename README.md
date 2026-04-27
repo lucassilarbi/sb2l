@@ -56,7 +56,7 @@ tested on Ubuntu22.04
 Install prerequisites:
 
 ```bash
-apt-get install cmake libgmp-dev python2.7 flex bison gcc g++ make pkg-config libfuse2 libqhull-dev
+sudo apt-get install cmake libgmp-dev python2.7 flex bison gcc g++ make pkg-config libfuse2 libqhull-dev
 ```
 
 Update git submodules:
@@ -71,7 +71,7 @@ Install SB2L:
 mkdir build && cd build
 cmake ..
 make
-make install
+sudo make install
 ```
 
 # Building examples
