@@ -297,7 +297,7 @@ int SB2::factorial(int n)
 }
 void SB2::compute_reBf()
 {
-    reBf_ = std::vector<std::vector<std::vector<double>>>(nS_, std::vector<std::vector<double>>(n_ + 1, std::vector<double>(d_)));
+    reBf_ = std::vector<std::vector<std::vector<double>>>(nS_, std::vector<std::vector<double>>(n_ + 1, std::vector<double>(d_, 0.0)));
     for (int s = 0; s < nS_; s++)
     {
         for (int i = s; i < s + p_ + 1; i++)
@@ -338,7 +338,7 @@ void SB2::compute_reBf()
 }
 void SB2::compute_ieBf()
 {
-    ieBf_ = std::vector<std::vector<std::vector<ibex::Interval>>>(nS_, std::vector<std::vector<ibex::Interval>>(n_ + 1, std::vector<ibex::Interval>(d_)));
+    ieBf_ = std::vector<std::vector<std::vector<ibex::Interval>>>(nS_, std::vector<std::vector<ibex::Interval>>(n_ + 1, std::vector<ibex::Interval>(d_, ibex::Interval(0.0))));
     for (int s = 0; s < nS_; s++)
     {
         for (int i = s; i < s + p_ + 1; i++)
@@ -365,7 +365,7 @@ void SB2::compute_ieBf()
 }
 void SB2::compute_aeBf()
 {
-    aeBf_ = std::vector<std::vector<std::vector<ibex::Affine2>>>(nS_, std::vector<std::vector<ibex::Affine2>>(n_ + 1, std::vector<ibex::Affine2>(d_)));
+    aeBf_ = std::vector<std::vector<std::vector<ibex::Affine2>>>(nS_, std::vector<std::vector<ibex::Affine2>>(n_ + 1, std::vector<ibex::Affine2>(d_, ibex::Affine2(0.0))));
     for (int s = 0; s < nS_; s++)
     {
         for (int i = s; i < s + p_ + 1; i++)
