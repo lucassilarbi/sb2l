@@ -88,7 +88,7 @@ make
 Launch example
 
 ```bash
-./example
+./basic_example
 ```
 
 # Visualization

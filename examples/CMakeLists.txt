@@ -5,12 +5,15 @@ set(CMAKE_CXX_STANDARD 14)
 
 find_package(sb2l REQUIRED)
 
-add_executable(example example.cpp vibes.cpp)
+add_executable(basic_example basic_example.cpp vibes.cpp)
+add_executable(advanced_example advanced_example.cpp vibes.cpp)
 
-target_link_libraries(example
-    PRIVATE
-        sb2l
-        qhullcpp
-        symengine
-        gmp
-)
+foreach(target basic_example advanced_example)
+    target_link_libraries(${target}
+        PRIVATE
+            sb2l
+            qhullcpp
+            symengine
+            gmp
+    )
+endforeach()
