@@ -86,9 +86,75 @@ int SB2::get_p() { return p_; }
 int SB2::get_n() { return n_; }
 int SB2::get_nS() { return nS_; }
 int SB2::get_d() { return d_; }
-std::vector<std::vector<std::vector<double>>> SB2::get_reBf() { return reBf_; }
-std::vector<std::vector<std::vector<ibex::Interval>>> SB2::get_ieBf() { return ieBf_; }
-std::vector<std::vector<std::vector<ibex::Affine2>>> SB2::get_aeBf() { return aeBf_; }
+std::vector<std::vector<std::vector<double>>> SB2::get_reBf() 
+{
+    switch (ps_)
+    {
+    case ParameterSet::IR:
+        reBf_ = std::vector<std::vector<std::vector<double>>>(nS_, std::vector<std::vector<double>>(n_ + 1, std::vector<double>(d_, 0.0)));
+        for (int s = 0; s < nS_; s++)
+        {
+            for (int i = s; i < s + p_ + 1; i++)
+            {
+                for (int du = 0; du < d_; du++)
+                {
+                    reBf_[s][i][du] = ieBf_[s][i][du].mid();
+                }
+            }
+        }
+        break;
+    case ParameterSet::Z:
+        reBf_ = std::vector<std::vector<std::vector<double>>>(nS_, std::vector<std::vector<double>>(n_ + 1, std::vector<double>(d_, 0.0)));
+        for (int s = 0; s < nS_; s++)
+        {
+            for (int i = s; i < s + p_ + 1; i++)
+            {
+                for (int du = 0; du < d_; du++)
+                {
+                    reBf_[s][i][du] = aeBf_[s][i][du].mid();
+                }
+            }
+        }
+        break;
+    }
+    return reBf_; 
+}
+std::vector<std::vector<std::vector<ibex::Interval>>> SB2::get_ieBf()
+{
+    switch (ps_)
+    {
+    case ParameterSet::R:
+        throw std::runtime_error("Can not build an interval basis from a real one");
+        break;
+    case ParameterSet::Z:
+        ieBf_ = std::vector<std::vector<std::vector<ibex::Interval>>>(nS_, std::vector<std::vector<ibex::Interval>>(n_ + 1, std::vector<ibex::Interval>(d_, ibex::Interval(0.0))));
+        for (int s = 0; s < nS_; s++)
+        {
+            for (int i = s; i < s + p_ + 1; i++)
+            {
+                for (int du = 0; du < d_; du++)
+                {
+                    ieBf_[s][i][du] = aeBf_[s][i][du].itv();
+                }
+            }
+        }
+        break;
+    }
+    return ieBf_; 
+}
+std::vector<std::vector<std::vector<ibex::Affine2>>> SB2::get_aeBf()
+{
+    switch (ps_)
+    {
+    case ParameterSet::R:
+        throw std::runtime_error("Can not build an affine basis from a real one");
+        break;
+    case ParameterSet::IR:
+        throw std::runtime_error("Can not build an affine basis from an interval one");
+        break;
+    }
+    return aeBf_; 
+}
 std::vector<std::vector<ibex::Interval>> SB2::get_rdu() { return rdu_; }
 std::vector<std::vector<ibex::Interval>> SB2::get_idu() { return idu_; }
 std::vector<std::vector<ibex::Affine2>> SB2::get_adu() { return adu_; }

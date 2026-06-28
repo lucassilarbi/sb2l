@@ -100,7 +100,7 @@ class SB2
      */
     int get_d();
     /**
-     * @brief get ieBf_
+     * @brief get basis
      */
     std::vector<std::vector<std::vector<double>>> get_reBf();
     std::vector<std::vector<std::vector<ibex::Interval>>> get_ieBf();
