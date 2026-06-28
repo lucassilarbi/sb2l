@@ -32,8 +32,8 @@ SB2::SB2(const int p,
       k_(nCP + p),
       nS_(nCP - p)
 {
-    if (p_ > n_ + 1)
-        throw std::runtime_error("The degree of the curve p must be greater or equal than the number of control points n+1");
+    if (p_ >= n_ + 1)
+        throw std::runtime_error("The degree of the curve p must be lower than the number of control points n+1");
     if (f_ == Form::TAYLOR)
     {
         if (t_ == -1) // by default, the taylor order is chosen to minimize the wraping effect
@@ -389,17 +389,23 @@ void SB2::compute_reBf()
     }
     if (f_ == Form::TAYLOR) // only for real-based B-spline: a last point must be evaluated
     {
-        ibex::Interval buffer(0.0);
-        for (int t = 0; t <= t_; t++)
+        for (int i = nS_-1; i<n_+1; i++)
         {
-            buffer += (iN_[t][nS_-1][n_]->eval(ibex::IntervalVector(1, rdu_[nS_-1][d_].mid())) / factorial(t) * pow(rdu_[nS_-1][d_] - rdu_[nS_-1][d_].mid(), t)).mid();
+            ibex::Interval buffer(0.0);
+            for (int t = 0; t <= t_; t++)
+            {
+                buffer += (iN_[t][nS_-1][i]->eval(ibex::IntervalVector(1, rdu_[nS_-1][d_].mid())) / factorial(t) * pow(rdu_[nS_-1][d_] - rdu_[nS_-1][d_].mid(), t)).mid();
+            }
+            buffer += (iN_[t_ + 1][nS_-1][i]->eval(ibex::IntervalVector(1, rdu_[nS_-1][d_])) / factorial(t_ + 1) * pow(rdu_[nS_-1][d_] - rdu_[nS_-1][d_].mid(), t_ + 1)).mid();
+            reBf_[nS_-1][i].push_back(buffer.mid());
         }
-        buffer += (iN_[t_ + 1][nS_-1][n_]->eval(ibex::IntervalVector(1, rdu_[nS_-1][d_])) / factorial(t_ + 1) * pow(rdu_[nS_-1][d_] - rdu_[nS_-1][d_].mid(), t_ + 1)).mid();
-        reBf_[nS_-1][n_].push_back(buffer.mid());
     }
     else
     {
-        reBf_[nS_-1][d_].push_back((iN_[0][nS_-1][d_]->eval(ibex::IntervalVector(1, rdu_[nS_-1][d_]))).mid());
+        for (int i = nS_-1; i<n_+1; i++)
+        {
+            reBf_[nS_-1][i].push_back((iN_[0][nS_-1][i]->eval(ibex::IntervalVector(1, rdu_[nS_-1][d_]))).mid());
+        }
     }
 }
 void SB2::compute_ieBf()
@@ -460,6 +466,11 @@ std::vector<std::vector<std::vector<double>>> SB2::eval_point(const std::vector<
 {
     std::vector<std::vector<std::vector<double>>> points = {};
     std::vector<double> vec(P.size());
+    for (size_t dim = 0; dim < P.size(); dim++)
+    {
+        if (P[dim].size() < (size_t)(n_ + 1))
+            throw std::runtime_error("A control point dimension has fewer than n+1 control points");
+    }
     if (ps_ == ParameterSet::R)
     {
         for (int s = 0; s < nS_; s++)
@@ -536,6 +547,11 @@ std::vector<std::vector<ibex::IntervalVector>> SB2::eval_box(const std::vector<i
 {
     std::vector<std::vector<ibex::IntervalVector>> boxes = {};
     ibex::IntervalVector box(P.size());
+    for (size_t dim = 0; dim < P.size(); dim++)
+    {
+        if (P[dim].size() < n_ + 1)
+            throw std::runtime_error("A control point dimension has fewer than n+1 control points");
+    }
     if (ps_ == ParameterSet::R)
     {
         for (int s = 0; s < nS_; s++)
@@ -635,6 +651,11 @@ std::vector<std::vector<ibex::Affine2Vector>> SB2::eval_zonotope(const std::vect
 {
     std::vector<std::vector<ibex::Affine2Vector>> zonotopes = {};
     ibex::Affine2Vector zon(P.size());
+    for (size_t dim = 0; dim < P.size(); dim++)
+    {
+        if (P[dim].size() < n_ + 1)
+            throw std::runtime_error("A control point dimension has fewer than n+1 control points");
+    }
     if (ps_ == ParameterSet::R)
     {
         for (int s = 0; s < nS_; s++)
