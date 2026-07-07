@@ -147,126 +147,126 @@ int main()
 
     // Example of control points
     //================================================== CONTROL POINTS EXAMPLE 1 ==========================================================//
-    double r(0.01); // radius
-    ibex::IntervalVector Px = ibex::IntervalVector(12);
-    Px[0] = ibex::Interval(1.0 - r, 1.0 + r);
-    Px[1] = ibex::Interval(0.5 - r, 0.5 + r);
-    Px[2] = ibex::Interval(0.1 - r * 10, 0.1 + r * 10);
-    Px[3] = ibex::Interval(0.4 - r, 0.4 + r);
-    Px[4] = ibex::Interval(1.9 - r * 20, 1.9 + r * 20);
-    Px[5] = ibex::Interval(0.8 - r, 0.8 + r);
-    Px[6] = ibex::Interval(1.9 - r, 1.9 + r);
-    Px[7] = ibex::Interval(2.8 - r * 15, 2.8 + r * 15);
-    Px[8] = ibex::Interval(1.4 - r, 1.4 + r);
-    Px[9] = ibex::Interval(2.2 - r, 2.2 + r);
-    Px[10] = ibex::Interval(2.5 - r, 2.5 + r);
-    Px[11] = ibex::Interval(2.9 - r * 7, 2.9 + r * 7);
-    ibex::IntervalVector Py = ibex::IntervalVector(12);
-    Py[0] = ibex::Interval(1.0 - r, 1.0 + r);
-    Py[1] = ibex::Interval(1.5 - r, 1.5 + r);
-    Py[2] = ibex::Interval(0.9 - r * 13, 0.9 + r * 13);
-    Py[3] = ibex::Interval(0.1 - r, 0.1 + r);
-    Py[4] = ibex::Interval(0.5 - r * 20, 0.5 + r * 20);
-    Py[5] = ibex::Interval(1.9 - r, 1.9 + r);
-    Py[6] = ibex::Interval(2.2 - r, 2.2 + r);
-    Py[7] = ibex::Interval(1.5 - r * 5, 1.5 + r * 5);
-    Py[8] = ibex::Interval(1.8 - r, 1.8 + r);
-    Py[9] = ibex::Interval(0.5 - r, 0.5 + r);
-    Py[10] = ibex::Interval(1.0 - r, 1.0 + r);
-    Py[11] = ibex::Interval(0.7 - r * 7, 0.7 + r * 7);
-    std::vector<ibex::IntervalVector> P{Px, Py};
-    std::vector<std::vector<double>> rP({{}, {}}); // real control points
-    for (int i = 0; i < P[0].size(); i++)
-    {
-        rP[0].push_back(Px[i].mid());
-        rP[1].push_back(Py[i].mid());
-    }
-    std::vector<ibex::Affine2Vector> aP(2, ibex::Affine2Vector(Px.size())); // affine control points
-    for (int i = 0; i < P[0].size(); i++)
-    {
-        aP[0][i] = Px[i];
-        aP[1][i] = Py[i];
-        ibex::Affine2Vector av(2);
-        av[0] = aP[0][i];
-        av[1] = aP[1][i];
-        std::pair<std::vector<double>, std::vector<double>> zonotope(compute_zonotope2D(av));
-        vibes::drawPolygon(zonotope.first, zonotope.second, "grey[grey]");
-    }
-    //================================================== CONTROL POINTS EXAMPLE 2 ==========================================================//
-    // int reserved(2); // reserved allow us to reserve some epsilon for control points. for example, if reserved=2, each control points is suppose to be defind with at most 2 affine form. 
-    //                  // moreover, it is really important to correcly setup epsilon numbers (the first element of std::pair<int,double>(1, 0.5)) to be consistent with reserved.
-    // ibex::Affine2Vector aPx = ibex::Affine2Vector(12, ibex::Affine2(0.0));
-    // for(int i=0;i<reserved;i++) aPx[0]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPx[0].initialize(1.0, std::list<std::pair<int,double>>({std::pair<int,double>(1, 0.01), std::pair<int,double>(2, -0.01), std::pair<int,double>(25, 0.0)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPx[1]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPx[1].initialize(0.5, std::list<std::pair<int,double>>({std::pair<int,double>(3, 0.01), std::pair<int,double>(4, -0.01), std::pair<int,double>(26, 0.0)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPx[2]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPx[2].initialize(0.1, std::list<std::pair<int,double>>({std::pair<int,double>(5, 0.01), std::pair<int,double>(6, -0.01), std::pair<int,double>(27, 0.0), std::pair<int,double>(39, 0.1)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPx[3]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPx[3].initialize(0.4, std::list<std::pair<int,double>>({std::pair<int,double>(7, 0.01), std::pair<int,double>(8, -0.01), std::pair<int,double>(28, 0.0)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPx[4]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPx[4].initialize(1.9, std::list<std::pair<int,double>>({std::pair<int,double>(9, 0.1), std::pair<int,double>(10, -0.05), std::pair<int,double>(29, 0.05)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPx[5]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPx[5].initialize(0.8, std::list<std::pair<int,double>>({std::pair<int,double>(11, 0.01), std::pair<int,double>(12, -0.01), std::pair<int,double>(30, 0.0)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPx[6]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPx[6].initialize(1.9, std::list<std::pair<int,double>>({std::pair<int,double>(13, 0.01), std::pair<int,double>(14, -0.01), std::pair<int,double>(31, 0.0)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPx[7]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPx[7].initialize(2.8, std::list<std::pair<int,double>>({std::pair<int,double>(15, -0.05), std::pair<int,double>(16, -0.1), std::pair<int,double>(32, 0.15), std::pair<int,double>(44, 0.1)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPx[8]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPx[8].initialize(1.4, std::list<std::pair<int,double>>({std::pair<int,double>(17, 0.01), std::pair<int,double>(18, -0.01), std::pair<int,double>(33, 0.0)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPx[9]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPx[9].initialize(2.2, std::list<std::pair<int,double>>({std::pair<int,double>(19, 0.01), std::pair<int,double>(20, -0.01), std::pair<int,double>(34, 0.0)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPx[10]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPx[10].initialize(2.5, std::list<std::pair<int,double>>({std::pair<int,double>(21, 0.01), std::pair<int,double>(22, -0.01), std::pair<int,double>(35, 0.0)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPx[11]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPx[11].initialize(2.9, std::list<std::pair<int,double>>({std::pair<int,double>(23, 0.07), std::pair<int,double>(24, -0.01), std::pair<int,double>(36, -0.1)}), ibex::Interval(0.0));
-    // ibex::Affine2Vector aPy = ibex::Affine2Vector(12, ibex::Affine2(0.0));
-    // for(int i=0;i<reserved;i++) aPy[0]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPy[0].initialize(1.0, std::list<std::pair<int,double>>({std::pair<int,double>(1, 0.01), std::pair<int,double>(2, 0.01), std::pair<int,double>(37, 0.0)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPy[1]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPy[1].initialize(1.5, std::list<std::pair<int,double>>({std::pair<int,double>(3, 0.01), std::pair<int,double>(4, 0.01), std::pair<int,double>(38, 0.0)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPy[2]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPy[2].initialize(0.9, std::list<std::pair<int,double>>({std::pair<int,double>(5, 0.01), std::pair<int,double>(6, 0.01), std::pair<int,double>(39, 0.3)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPy[3]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPy[3].initialize(0.1, std::list<std::pair<int,double>>({std::pair<int,double>(7, 0.01), std::pair<int,double>(8, 0.01), std::pair<int,double>(40, 0.0)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPy[4]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPy[4].initialize(0.5, std::list<std::pair<int,double>>({std::pair<int,double>(9, 0.1), std::pair<int,double>(10, 0.1), std::pair<int,double>(41, 0.05)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPy[5]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPy[5].initialize(1.9, std::list<std::pair<int,double>>({std::pair<int,double>(11, 0.01), std::pair<int,double>(12, 0.01), std::pair<int,double>(42, 0.0)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPy[6]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPy[6].initialize(2.2, std::list<std::pair<int,double>>({std::pair<int,double>(13, 0.01), std::pair<int,double>(14, 0.01), std::pair<int,double>(43, 0.0)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPy[7]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPy[7].initialize(1.5, std::list<std::pair<int,double>>({std::pair<int,double>(15, 0.05), std::pair<int,double>(16, 0.15), std::pair<int,double>(44, 0.1), std::pair<int,double>(32, 0.03)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPy[8]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPy[8].initialize(1.8, std::list<std::pair<int,double>>({std::pair<int,double>(17, 0.01), std::pair<int,double>(18, 0.01), std::pair<int,double>(45, 0.0)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPy[9]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPy[9].initialize(0.5, std::list<std::pair<int,double>>({std::pair<int,double>(19, 0.01), std::pair<int,double>(20, 0.01), std::pair<int,double>(46, 0.0)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPy[10]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPy[10].initialize(1.0, std::list<std::pair<int,double>>({std::pair<int,double>(21, 0.01), std::pair<int,double>(22, 0.01), std::pair<int,double>(47, 0.0)}), ibex::Interval(0.0));
-    // for(int i=0;i<reserved;i++) aPy[11]+=ibex::Affine2(ibex::Interval(-1,1));
-    // aPy[11].initialize(0.7, std::list<std::pair<int,double>>({std::pair<int,double>(23, 0.01), std::pair<int,double>(24, 0.03), std::pair<int,double>(48, 0.0)}), ibex::Interval(0.0));
-    // std::vector<ibex::Affine2Vector> aP(2, ibex::Affine2Vector(aPx.size())); // affine control points
-    // for (int i=0; i<aPx.size(); i++)
-    // {
-    //     aP[0][i] = aPx[i];
-    //     aP[1][i] = aPy[i];
-    //     ibex::Affine2Vector av(2);
-    //     av[0]=aP[0][i]; av[1]=aP[1][i];
-    //     std::pair<std::vector<double>,std::vector<double>> zonotope(compute_zonotope2D(av));
-    //     vibes::drawPolygon(zonotope.first, zonotope.second, "grey[grey]");
-    // }
-    // std::vector<ibex::IntervalVector> P(2, ibex::IntervalVector(aPx.size()));
-    // for (int i=0; i<P[0].size(); i++)
-    // {
-    //     P[0][i] = aPx[i].itv();
-    //     P[1][i] = aPy[i].itv();
-    // }
+    // double r(0.01); // radius
+    // ibex::IntervalVector Px = ibex::IntervalVector(12);
+    // Px[0] = ibex::Interval(1.0 - r, 1.0 + r);
+    // Px[1] = ibex::Interval(0.5 - r, 0.5 + r);
+    // Px[2] = ibex::Interval(0.1 - r * 10, 0.1 + r * 10);
+    // Px[3] = ibex::Interval(0.4 - r, 0.4 + r);
+    // Px[4] = ibex::Interval(1.9 - r * 20, 1.9 + r * 20);
+    // Px[5] = ibex::Interval(0.8 - r, 0.8 + r);
+    // Px[6] = ibex::Interval(1.9 - r, 1.9 + r);
+    // Px[7] = ibex::Interval(2.8 - r * 15, 2.8 + r * 15);
+    // Px[8] = ibex::Interval(1.4 - r, 1.4 + r);
+    // Px[9] = ibex::Interval(2.2 - r, 2.2 + r);
+    // Px[10] = ibex::Interval(2.5 - r, 2.5 + r);
+    // Px[11] = ibex::Interval(2.9 - r * 7, 2.9 + r * 7);
+    // ibex::IntervalVector Py = ibex::IntervalVector(12);
+    // Py[0] = ibex::Interval(1.0 - r, 1.0 + r);
+    // Py[1] = ibex::Interval(1.5 - r, 1.5 + r);
+    // Py[2] = ibex::Interval(0.9 - r * 13, 0.9 + r * 13);
+    // Py[3] = ibex::Interval(0.1 - r, 0.1 + r);
+    // Py[4] = ibex::Interval(0.5 - r * 20, 0.5 + r * 20);
+    // Py[5] = ibex::Interval(1.9 - r, 1.9 + r);
+    // Py[6] = ibex::Interval(2.2 - r, 2.2 + r);
+    // Py[7] = ibex::Interval(1.5 - r * 5, 1.5 + r * 5);
+    // Py[8] = ibex::Interval(1.8 - r, 1.8 + r);
+    // Py[9] = ibex::Interval(0.5 - r, 0.5 + r);
+    // Py[10] = ibex::Interval(1.0 - r, 1.0 + r);
+    // Py[11] = ibex::Interval(0.7 - r * 7, 0.7 + r * 7);
+    // std::vector<ibex::IntervalVector> P{Px, Py};
     // std::vector<std::vector<double>> rP({{}, {}}); // real control points
     // for (int i = 0; i < P[0].size(); i++)
     // {
-    //     rP[0].push_back(aPx[i].mid());
-    //     rP[1].push_back(aPy[i].mid());
+    //     rP[0].push_back(Px[i].mid());
+    //     rP[1].push_back(Py[i].mid());
     // }
+    // std::vector<ibex::Affine2Vector> aP(2, ibex::Affine2Vector(Px.size())); // affine control points
+    // for (int i = 0; i < P[0].size(); i++)
+    // {
+    //     aP[0][i] = Px[i];
+    //     aP[1][i] = Py[i];
+    //     ibex::Affine2Vector av(2);
+    //     av[0] = aP[0][i];
+    //     av[1] = aP[1][i];
+    //     std::pair<std::vector<double>, std::vector<double>> zonotope(compute_zonotope2D(av));
+    //     vibes::drawPolygon(zonotope.first, zonotope.second, "grey[grey]");
+    // }
+    //================================================== CONTROL POINTS EXAMPLE 2 ==========================================================//
+    int reserved(2); // reserved allow us to reserve some epsilon for control points. for example, if reserved=2, each control points is suppose to be defind with at most 2 affine form. 
+                     // moreover, it is really important to correcly setup epsilon numbers (the first element of std::pair<int,double>(1, 0.5)) to be consistent with reserved.
+    ibex::Affine2Vector aPx = ibex::Affine2Vector(12, ibex::Affine2(0.0));
+    for(int i=0;i<reserved;i++) aPx[0]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPx[0].initialize(1.0, std::list<std::pair<int,double>>({std::pair<int,double>(1, 0.01), std::pair<int,double>(2, -0.01), std::pair<int,double>(25, 0.0)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPx[1]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPx[1].initialize(0.5, std::list<std::pair<int,double>>({std::pair<int,double>(3, 0.01), std::pair<int,double>(4, -0.01), std::pair<int,double>(26, 0.0)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPx[2]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPx[2].initialize(0.1, std::list<std::pair<int,double>>({std::pair<int,double>(5, 0.01), std::pair<int,double>(6, -0.01), std::pair<int,double>(27, 0.0), std::pair<int,double>(39, 0.1)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPx[3]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPx[3].initialize(0.4, std::list<std::pair<int,double>>({std::pair<int,double>(7, 0.01), std::pair<int,double>(8, -0.01), std::pair<int,double>(28, 0.0)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPx[4]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPx[4].initialize(1.9, std::list<std::pair<int,double>>({std::pair<int,double>(9, 0.1), std::pair<int,double>(10, -0.05), std::pair<int,double>(29, 0.05)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPx[5]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPx[5].initialize(0.8, std::list<std::pair<int,double>>({std::pair<int,double>(11, 0.01), std::pair<int,double>(12, -0.01), std::pair<int,double>(30, 0.0)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPx[6]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPx[6].initialize(1.9, std::list<std::pair<int,double>>({std::pair<int,double>(13, 0.01), std::pair<int,double>(14, -0.01), std::pair<int,double>(31, 0.0)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPx[7]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPx[7].initialize(2.8, std::list<std::pair<int,double>>({std::pair<int,double>(15, -0.05), std::pair<int,double>(16, -0.1), std::pair<int,double>(32, 0.15), std::pair<int,double>(44, 0.1)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPx[8]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPx[8].initialize(1.4, std::list<std::pair<int,double>>({std::pair<int,double>(17, 0.01), std::pair<int,double>(18, -0.01), std::pair<int,double>(33, 0.0)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPx[9]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPx[9].initialize(2.2, std::list<std::pair<int,double>>({std::pair<int,double>(19, 0.01), std::pair<int,double>(20, -0.01), std::pair<int,double>(34, 0.0)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPx[10]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPx[10].initialize(2.5, std::list<std::pair<int,double>>({std::pair<int,double>(21, 0.01), std::pair<int,double>(22, -0.01), std::pair<int,double>(35, 0.0)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPx[11]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPx[11].initialize(2.9, std::list<std::pair<int,double>>({std::pair<int,double>(23, 0.07), std::pair<int,double>(24, -0.01), std::pair<int,double>(36, -0.1)}), ibex::Interval(0.0));
+    ibex::Affine2Vector aPy = ibex::Affine2Vector(12, ibex::Affine2(0.0));
+    for(int i=0;i<reserved;i++) aPy[0]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPy[0].initialize(1.0, std::list<std::pair<int,double>>({std::pair<int,double>(1, 0.01), std::pair<int,double>(2, 0.01), std::pair<int,double>(37, 0.0)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPy[1]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPy[1].initialize(1.5, std::list<std::pair<int,double>>({std::pair<int,double>(3, 0.01), std::pair<int,double>(4, 0.01), std::pair<int,double>(38, 0.0)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPy[2]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPy[2].initialize(0.9, std::list<std::pair<int,double>>({std::pair<int,double>(5, 0.01), std::pair<int,double>(6, 0.01), std::pair<int,double>(39, 0.3)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPy[3]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPy[3].initialize(0.1, std::list<std::pair<int,double>>({std::pair<int,double>(7, 0.01), std::pair<int,double>(8, 0.01), std::pair<int,double>(40, 0.0)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPy[4]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPy[4].initialize(0.5, std::list<std::pair<int,double>>({std::pair<int,double>(9, 0.1), std::pair<int,double>(10, 0.1), std::pair<int,double>(41, 0.05)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPy[5]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPy[5].initialize(1.9, std::list<std::pair<int,double>>({std::pair<int,double>(11, 0.01), std::pair<int,double>(12, 0.01), std::pair<int,double>(42, 0.0)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPy[6]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPy[6].initialize(2.2, std::list<std::pair<int,double>>({std::pair<int,double>(13, 0.01), std::pair<int,double>(14, 0.01), std::pair<int,double>(43, 0.0)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPy[7]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPy[7].initialize(1.5, std::list<std::pair<int,double>>({std::pair<int,double>(15, 0.05), std::pair<int,double>(16, 0.15), std::pair<int,double>(44, 0.1), std::pair<int,double>(32, 0.03)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPy[8]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPy[8].initialize(1.8, std::list<std::pair<int,double>>({std::pair<int,double>(17, 0.01), std::pair<int,double>(18, 0.01), std::pair<int,double>(45, 0.0)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPy[9]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPy[9].initialize(0.5, std::list<std::pair<int,double>>({std::pair<int,double>(19, 0.01), std::pair<int,double>(20, 0.01), std::pair<int,double>(46, 0.0)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPy[10]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPy[10].initialize(1.0, std::list<std::pair<int,double>>({std::pair<int,double>(21, 0.01), std::pair<int,double>(22, 0.01), std::pair<int,double>(47, 0.0)}), ibex::Interval(0.0));
+    for(int i=0;i<reserved;i++) aPy[11]+=ibex::Affine2(ibex::Interval(-1,1));
+    aPy[11].initialize(0.7, std::list<std::pair<int,double>>({std::pair<int,double>(23, 0.01), std::pair<int,double>(24, 0.03), std::pair<int,double>(48, 0.0)}), ibex::Interval(0.0));
+    std::vector<ibex::Affine2Vector> aP(2, ibex::Affine2Vector(aPx.size())); // affine control points
+    for (int i=0; i<aPx.size(); i++)
+    {
+        aP[0][i] = aPx[i];
+        aP[1][i] = aPy[i];
+        ibex::Affine2Vector av(2);
+        av[0]=aP[0][i]; av[1]=aP[1][i];
+        std::pair<std::vector<double>,std::vector<double>> zonotope(compute_zonotope2D(av));
+        vibes::drawPolygon(zonotope.first, zonotope.second, "grey[grey]");
+    }
+    std::vector<ibex::IntervalVector> P(2, ibex::IntervalVector(aPx.size()));
+    for (int i=0; i<P[0].size(); i++)
+    {
+        P[0][i] = aPx[i].itv();
+        P[1][i] = aPy[i].itv();
+    }
+    std::vector<std::vector<double>> rP({{}, {}}); // real control points
+    for (int i = 0; i < P[0].size(); i++)
+    {
+        rP[0].push_back(aPx[i].mid());
+        rP[1].push_back(aPy[i].mid());
+    }
     //============================================================================================================//
 
     std::cout << "Interval B-spline parameters:" << std::endl;
