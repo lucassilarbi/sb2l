@@ -155,9 +155,54 @@ std::vector<std::vector<std::vector<ibex::Affine2>>> SB2::get_aeBf()
     }
     return aeBf_; 
 }
-std::vector<std::vector<ibex::Interval>> SB2::get_rdu() { return rdu_; }
-std::vector<std::vector<ibex::Interval>> SB2::get_idu() { return idu_; }
-std::vector<std::vector<ibex::Affine2>> SB2::get_adu() { return adu_; }
+std::vector<std::vector<ibex::Interval>> SB2::get_rdu()
+{
+    switch (ps_)
+    {
+    case ParameterSet::IR:
+        rdu_ = std::vector<std::vector<ibex::Interval>>(nS_);
+        for (int s = 0; s < nS_; s++)
+            for (int du = 0; du < d_; du++)
+                rdu_[s].push_back(ibex::Interval(idu_[s][du].mid()));
+        break;
+    case ParameterSet::Z:
+        rdu_ = std::vector<std::vector<ibex::Interval>>(nS_);
+        for (int s = 0; s < nS_; s++)
+            for (int du = 0; du < d_; du++)
+                rdu_[s].push_back(ibex::Interval(adu_[s][du].mid()));
+        break;
+    }
+    return rdu_;
+}
+std::vector<std::vector<ibex::Interval>> SB2::get_idu()
+{
+    switch (ps_)
+    {
+    case ParameterSet::R:
+        throw std::runtime_error("Can not build an interval decomposition from a real one");
+        break;
+    case ParameterSet::Z:
+        idu_ = std::vector<std::vector<ibex::Interval>>(nS_);
+        for (int s = 0; s < nS_; s++)
+            for (int du = 0; du < d_; du++)
+                idu_[s].push_back(adu_[s][du].itv());
+        break;
+    }
+    return idu_;
+}
+std::vector<std::vector<ibex::Affine2>> SB2::get_adu()
+{
+    switch (ps_)
+    {
+    case ParameterSet::R:
+        throw std::runtime_error("Can not build an affine decomposition from a real one");
+        break;
+    case ParameterSet::IR:
+        throw std::runtime_error("Can not build an affine decomposition from an interval one");
+        break;
+    }
+    return adu_;
+}
 void SB2::compute_U_()
 {
     if (ct_ == CurveType::UNIFORM_RATIONAL || ct_ == CurveType::UNIFORM_NONRATIONAL)
