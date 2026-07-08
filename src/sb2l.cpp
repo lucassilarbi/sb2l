@@ -155,97 +155,54 @@ std::vector<std::vector<std::vector<ibex::Affine2>>> SB2::get_aeBf()
     }
     return aeBf_; 
 }
-std::vector<std::vector<std::vector<ibex::Interval>>> SB2::get_ieBf_diff(const int order)
+std::vector<std::vector<ibex::Interval>> SB2::get_rdu()
 {
-    if (ps_ == ParameterSet::R)
-        throw std::runtime_error("Can not build an interval basis from a real one");
-    auto to_ibex = [](std::string expr) { for (size_t pos = 0; (pos = expr.find("**", pos)) != std::string::npos; expr.replace(pos, 2, "^"), ++pos); return expr; };
-    const int nT = (f_ == Form::TAYLOR) ? t_ + 1 : 0; // last derivative level used by the Taylor remainder
-    std::vector<std::vector<std::vector<ibex::Interval>>> ieBf_diff(nS_, std::vector<std::vector<ibex::Interval>>(n_ + 1, std::vector<ibex::Interval>(d_, ibex::Interval(0.0))));
-    for (int s = 0; s < nS_; s++)
+    switch (ps_)
     {
-        for (int i = s; i < s + p_ + 1; i++)
-        {
-            std::vector<std::shared_ptr<ibex::Function>> iN_diff(nT + 1);
-            SymEngine::Expression expr = N_[0][s][i];
-            for (int t = 0; t < order; t++) expr = expr.diff(u_);
-            for (int t = 0; t <= nT; t++)
-            {
-                iN_diff[t] = std::make_shared<ibex::Function>("u", to_ibex(expr.get_basic()->__str__()).c_str());
-                expr = expr.diff(u_);
-            }
+    case ParameterSet::IR:
+        rdu_ = std::vector<std::vector<ibex::Interval>>(nS_);
+        for (int s = 0; s < nS_; s++)
             for (int du = 0; du < d_; du++)
-            {
-                if (f_ == Form::TAYLOR)
-                {
-                    if (ps_ == ParameterSet::Z)
-                    {
-                        ibex::Affine2 buffer(0);
-                        for (int t = 0; t <= t_; t++)
-                            buffer += iN_diff[t]->eval_affine2(ibex::Affine2Vector(1, adu_[s][du].mid())) / factorial(t) * pow(adu_[s][du] - adu_[s][du].mid(), t);
-                        buffer += iN_diff[t_ + 1]->eval_affine2(ibex::Affine2Vector(1, adu_[s][du])) / factorial(t_ + 1) * pow(adu_[s][du] - adu_[s][du].mid(), t_ + 1);
-                        ieBf_diff[s][i][du] = buffer.itv();
-                    }
-                    else
-                    {
-                        ibex::Interval buffer(0, 0);
-                        for (int t = 0; t <= t_; t++)
-                            buffer += iN_diff[t]->eval(ibex::IntervalVector(1, idu_[s][du].mid())) / factorial(t) * pow(idu_[s][du] - idu_[s][du].mid(), t);
-                        buffer += iN_diff[t_ + 1]->eval(ibex::IntervalVector(1, idu_[s][du])) / factorial(t_ + 1) * pow(idu_[s][du] - idu_[s][du].mid(), t_ + 1);
-                        ieBf_diff[s][i][du] = buffer;
-                    }
-                }
-                else
-                {
-                    ieBf_diff[s][i][du] = (ps_ == ParameterSet::Z) ? iN_diff[0]->eval_affine2(ibex::Affine2Vector(1, adu_[s][du])).itv()
-                                                                    : iN_diff[0]->eval(ibex::IntervalVector(1, idu_[s][du]));
-                }
-            }
-        }
+                rdu_[s].push_back(ibex::Interval(idu_[s][du].mid()));
+        break;
+    case ParameterSet::Z:
+        rdu_ = std::vector<std::vector<ibex::Interval>>(nS_);
+        for (int s = 0; s < nS_; s++)
+            for (int du = 0; du < d_; du++)
+                rdu_[s].push_back(ibex::Interval(adu_[s][du].mid()));
+        break;
     }
-    return ieBf_diff;
+    return rdu_;
 }
-std::vector<std::vector<std::vector<ibex::Affine2>>> SB2::get_aeBf_diff(const int order)
+std::vector<std::vector<ibex::Interval>> SB2::get_idu()
 {
-    if (ps_ != ParameterSet::Z)
-        throw std::runtime_error("Can not build an affine basis derivative outside of the Z parameter set");
-    auto to_ibex = [](std::string expr) { for (size_t pos = 0; (pos = expr.find("**", pos)) != std::string::npos; expr.replace(pos, 2, "^"), ++pos); return expr; };
-    const int nT = (f_ == Form::TAYLOR) ? t_ + 1 : 0; // last derivative level used by the Taylor remainder
-    std::vector<std::vector<std::vector<ibex::Affine2>>> aeBf_diff(nS_, std::vector<std::vector<ibex::Affine2>>(n_ + 1, std::vector<ibex::Affine2>(d_, ibex::Affine2(0.0))));
-    for (int s = 0; s < nS_; s++)
+    switch (ps_)
     {
-        for (int i = s; i < s + p_ + 1; i++)
-        {
-            std::vector<std::shared_ptr<ibex::Function>> iN_diff(nT + 1);
-            SymEngine::Expression expr = N_[0][s][i];
-            for (int t = 0; t < order; t++) expr = expr.diff(u_);
-            for (int t = 0; t <= nT; t++)
-            {
-                iN_diff[t] = std::make_shared<ibex::Function>("u", to_ibex(expr.get_basic()->__str__()).c_str());
-                expr = expr.diff(u_);
-            }
+    case ParameterSet::R:
+        throw std::runtime_error("Can not build an interval decomposition from a real one");
+        break;
+    case ParameterSet::Z:
+        idu_ = std::vector<std::vector<ibex::Interval>>(nS_);
+        for (int s = 0; s < nS_; s++)
             for (int du = 0; du < d_; du++)
-            {
-                if (f_ == Form::TAYLOR)
-                {
-                    ibex::Affine2 buffer(0);
-                    for (int t = 0; t <= t_; t++)
-                        buffer += iN_diff[t]->eval_affine2(ibex::Affine2Vector(1, adu_[s][du].mid())) / factorial(t) * pow(adu_[s][du] - adu_[s][du].mid(), t);
-                    buffer += iN_diff[t_ + 1]->eval_affine2(ibex::Affine2Vector(1, adu_[s][du])) / factorial(t_ + 1) * pow(adu_[s][du] - adu_[s][du].mid(), t_ + 1);
-                    aeBf_diff[s][i][du] = buffer;
-                }
-                else
-                {
-                    aeBf_diff[s][i][du] = iN_diff[0]->eval_affine2(ibex::Affine2Vector(1, adu_[s][du]));
-                }
-            }
-        }
+                idu_[s].push_back(adu_[s][du].itv());
+        break;
     }
-    return aeBf_diff;
+    return idu_;
 }
-std::vector<std::vector<ibex::Interval>> SB2::get_rdu() { return rdu_; }
-std::vector<std::vector<ibex::Interval>> SB2::get_idu() { return idu_; }
-std::vector<std::vector<ibex::Affine2>> SB2::get_adu() { return adu_; }
+std::vector<std::vector<ibex::Affine2>> SB2::get_adu()
+{
+    switch (ps_)
+    {
+    case ParameterSet::R:
+        throw std::runtime_error("Can not build an affine decomposition from a real one");
+        break;
+    case ParameterSet::IR:
+        throw std::runtime_error("Can not build an affine decomposition from an interval one");
+        break;
+    }
+    return adu_;
+}
 void SB2::compute_U_()
 {
     if (ct_ == CurveType::UNIFORM_RATIONAL || ct_ == CurveType::UNIFORM_NONRATIONAL)
