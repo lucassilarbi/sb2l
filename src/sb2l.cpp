@@ -155,6 +155,26 @@ std::vector<std::vector<std::vector<ibex::Affine2>>> SB2::get_aeBf()
     }
     return aeBf_;
 }
+std::vector<std::vector<std::vector<double>>> SB2::get_reBf_diff(const int order)
+{
+    auto to_ibex = [](std::string expr) { for (size_t pos = 0; (pos = expr.find("**", pos)) != std::string::npos; expr.replace(pos, 2, "^"), ++pos); return expr; };
+    std::vector<std::vector<std::vector<double>>> reBf_diff(nS_, std::vector<std::vector<double>>(n_ + 1, std::vector<double>(d_, 0.0)));
+    for (int s = 0; s < nS_; s++)
+    {
+        for (int i = s; i < s + p_ + 1; i++)
+        {
+            SymEngine::Expression expr = N_[0][s][i];
+            for (int t = 0; t < order; t++) expr = expr.diff(u_);
+            ibex::Function iN_diff("u", to_ibex(expr.get_basic()->__str__()).c_str());
+            for (int du = 0; du < d_; du++) // evaluated on a single parameter value: neither the Taylor form nor its remainder is needed
+            {
+                const double u = (ps_ == ParameterSet::Z) ? adu_[s][du].mid() : ((ps_ == ParameterSet::IR) ? idu_[s][du].mid() : rdu_[s][du].mid());
+                reBf_diff[s][i][du] = iN_diff.eval(ibex::IntervalVector(1, u)).mid();
+            }
+        }
+    }
+    return reBf_diff;
+}
 std::vector<std::vector<std::vector<ibex::Interval>>> SB2::get_ieBf_diff(const int order)
 {
     if (ps_ == ParameterSet::R)

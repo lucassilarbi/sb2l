@@ -108,6 +108,7 @@ class SB2
     /**
      * @brief evaluate the order-th derivative of the basis functions, using the same form as the basis
      */
+    std::vector<std::vector<std::vector<double>>> get_reBf_diff(const int order);
     std::vector<std::vector<std::vector<ibex::Interval>>> get_ieBf_diff(const int order);
     std::vector<std::vector<std::vector<ibex::Affine2>>> get_aeBf_diff(const int order);
     /**
