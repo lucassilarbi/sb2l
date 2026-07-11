@@ -71,9 +71,8 @@ install(
     FILES ${CMAKE_CURRENT_BINARY_DIR}/3rd/symengine-0.14.0/cmake/FindGMP.cmake
     DESTINATION lib/cmake/sb2l)
 
-# Numerical validation of the python3 dynibex port (off by default).
-option(SB2L_BUILD_TESTS "Build sb2l tests" OFF)
-if(SB2L_BUILD_TESTS)
-    enable_testing()
-    add_subdirectory(tests)
+# Interactive ImGui editor (off by default; needs GLFW + OpenGL).
+option(SB2L_BUILD_GUI "Build the ImGui interactive editor" OFF)
+if(SB2L_BUILD_GUI)
+    add_subdirectory(gui)
 endif()

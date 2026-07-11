@@ -37,7 +37,9 @@ RUN apt-get install -y \
     libfuse2 \
     libqhull-dev \
     fuse \
-    git
+    git \
+    libglfw3-dev \
+    libgl1-mesa-dev
 
 # Build
 WORKDIR /root/sb2l

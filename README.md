@@ -99,3 +99,27 @@ Used the [Vibes](https://github.com/ENSTABretagneRobotics/VIBES) library. First 
 cd VIBes-viewer
 ./VIBes-0.2.3-linux.AppImage
 ```
+
+# Interactive GUI
+
+An optional Dear ImGui editor (`gui/`) displays a B-spline of any type and lets you
+edit it directly on its control points: drag a control point, drag inside a control box
+or zonotope to move it, and drag a corner to resize it. Zonotope rendering uses a fast
+O(m log m) boundary so evaluation stays interactive.
+
+Extra prerequisites (already in the Docker image):
+
+```bash
+sudo apt-get install libglfw3-dev libgl1-mesa-dev
+```
+
+Build and run (Dear ImGui is vendored under `3rd/imgui`; the build is off by default):
+
+```bash
+mkdir build && cd build
+cmake -DSB2L_BUILD_GUI=ON ..
+make sb2l_gui
+./gui/sb2l_gui
+```
+
+A display is required (use the Docker X11 setup above).
