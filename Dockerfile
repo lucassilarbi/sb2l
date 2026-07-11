@@ -26,9 +26,9 @@ RUN apt-get install -y \
 
 # Dependencies
 RUN apt-get install -y \
-    cmake \ 
+    cmake \
     libgmp-dev \
-    python2.7 \
+    python3 \
     flex \
     bison \
     gcc \

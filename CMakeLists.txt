@@ -31,9 +31,9 @@ ExternalProject_Add(dynibex_ext
     DOWNLOAD_COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/3rd/dynibex-2.3 ${CMAKE_CURRENT_BINARY_DIR}/3rd/dynibex-2.3
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/3rd/dynibex-2.3
     SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/3rd/dynibex-2.3
-    CONFIGURE_COMMAND python2.7 ./waf configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/3rd/dynibex-2.3 --without-lp
-    BUILD_COMMAND python2.7 ./waf build
-    INSTALL_COMMAND python2.7 ./waf install
+    CONFIGURE_COMMAND python3 waf3.py configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/3rd/dynibex-2.3 --without-lp
+    BUILD_COMMAND python3 waf3.py build
+    INSTALL_COMMAND python3 waf3.py install
     BUILD_IN_SOURCE 1
 )
 add_library(filib STATIC IMPORTED GLOBAL)
@@ -67,6 +67,13 @@ install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/3rd/dynibex-2.3/lib/ DESTINATION l
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/3rd/dynibex-2.3/share/ DESTINATION share)
 # install cmakes to give access to GMP
 install(
-    FILES ${CMAKE_CURRENT_BINARY_DIR}/3rd/symengine-0.14.0/cmake/LibFindMacros.cmake 
-    FILES ${CMAKE_CURRENT_BINARY_DIR}/3rd/symengine-0.14.0/cmake/FindGMP.cmake 
+    FILES ${CMAKE_CURRENT_BINARY_DIR}/3rd/symengine-0.14.0/cmake/LibFindMacros.cmake
+    FILES ${CMAKE_CURRENT_BINARY_DIR}/3rd/symengine-0.14.0/cmake/FindGMP.cmake
     DESTINATION lib/cmake/sb2l)
+
+# Numerical validation of the python3 dynibex port (off by default).
+option(SB2L_BUILD_TESTS "Build sb2l tests" OFF)
+if(SB2L_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

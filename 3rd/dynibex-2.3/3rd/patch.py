@@ -19,8 +19,14 @@ import copy
 import logging
 import re
 # cStringIO doesn't support unicode in 2.5
-from StringIO import StringIO
-import urllib2
+try:
+  from StringIO import StringIO      # py2
+except ImportError:
+  from io import BytesIO as StringIO  # py3: patch data is bytes
+try:
+  import urllib2                      # py2
+except ImportError:
+  import urllib.request as urllib2    # py3
 
 from os.path import exists, isfile, abspath
 from os import unlink
