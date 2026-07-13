@@ -107,19 +107,40 @@ edit it directly on its control points: drag a control point, drag inside a cont
 or zonotope to move it, and drag a corner to resize it. Zonotope rendering uses a fast
 O(m log m) boundary so evaluation stays interactive.
 
-Extra prerequisites (already in the Docker image):
+Dear ImGui is vendored under `3rd/imgui`; the GUI is off by default and enabled with
+`-DSB2L_BUILD_GUI=ON`.
+
+## Prerequisites
+
+The core prerequisites (see "Building from source") plus GLFW and OpenGL (already in the
+Docker image):
 
 ```bash
 sudo apt-get install libglfw3-dev libgl1-mesa-dev
 ```
 
-Build and run (Dear ImGui is vendored under `3rd/imgui`; the build is off by default):
+## Compile
+
+From the repository root, on a fresh clone:
 
 ```bash
-mkdir build && cd build
+git submodule update --init --recursive
+mkdir -p build && cd build
 cmake -DSB2L_BUILD_GUI=ON ..
-make sb2l_gui
+make sb2l_gui -j
+```
+
+The executable is produced at `build/gui/sb2l_gui`.
+
+## Launch
+
+A display is required (use the Docker X11 setup above).
+
+```bash
 ./gui/sb2l_gui
 ```
 
-A display is required (use the Docker X11 setup above).
+Controls: pick the parameter set / curve type / degree / number of control points in the
+"Controls" window; in the "Canvas" window drag a control handle to edit, drag inside a box
+or zonotope to move it and drag a corner to resize it, scroll to zoom, and drag empty space
+to pan.
