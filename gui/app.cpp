@@ -173,18 +173,20 @@ std::vector<ibex::Affine2Vector> App::control_points_Z() const
 void App::alloc_geometry()
 {
     const int nS = spline->get_nS(), d = spline->get_d();
+    // Only a real parameter evaluates the closing element of the last segment
+    // (SB2::du_count), whatever set the control points live in.
+    const int n = nS * d + (ps == sb2l::ParameterSet::R ? 1 : 0);
     polylines.clear();
     boxes.clear();
     zonos.clear();
-    if (ps == sb2l::ParameterSet::R) {
+    if (cs == sb2l::ParameterSet::R) {
         // One continuous polyline: joining the segments end-to-end removes the
-        // gaps between per-segment sample runs. The last segment carries the
-        // closing sample, hence the +1.
-        polylines.assign(1, std::vector<Vec2>(nS * d + 1));
-    } else if (ps == sb2l::ParameterSet::IR) {
-        boxes.assign(nS * d, Box{});
+        // gaps between per-segment sample runs.
+        polylines.assign(1, std::vector<Vec2>(n));
+    } else if (cs == sb2l::ParameterSet::IR) {
+        boxes.assign(n, Box{});
     } else {
-        zonos.assign(nS * d, std::vector<Vec2>());
+        zonos.assign(n, std::vector<Vec2>());
     }
 }
 
@@ -194,11 +196,11 @@ void App::refresh_geometry(int s0, int s1)
     if (s0 < 0) s0 = 0;
     if (s1 > nS - 1) s1 = nS - 1;
     for (int s = s0; s <= s1; ++s) {
-        if (ps == sb2l::ParameterSet::R) {
+        if (cs == sb2l::ParameterSet::R) {
             const std::vector<std::vector<double>>& seg = epoints[s];
             for (size_t du = 0; du < seg.size(); ++du)
                 polylines[0][s * d + du] = {seg[du][0], seg[du][1]};
-        } else if (ps == sb2l::ParameterSet::IR) {
+        } else if (cs == sb2l::ParameterSet::IR) {
             const std::vector<ibex::IntervalVector>& seg = eboxes[s];
             for (size_t du = 0; du < seg.size(); ++du) {
                 const ibex::IntervalVector& b = seg[du];
@@ -224,9 +226,9 @@ void App::reeval()
     eboxes.clear();
     ezonos.clear();
     try {
-        if (ps == sb2l::ParameterSet::R)
+        if (cs == sb2l::ParameterSet::R)
             epoints = spline->eval_point(control_points_R());
-        else if (ps == sb2l::ParameterSet::IR)
+        else if (cs == sb2l::ParameterSet::IR)
             eboxes = spline->eval_box(control_points_IR());
         else
             ezonos = spline->eval_zonotope(control_points_Z());
@@ -248,8 +250,8 @@ void App::update_control_point(int i)
 {
     if (!spline) return;
     const int nS = spline->get_nS();
-    const size_t cached = (ps == sb2l::ParameterSet::R)  ? epoints.size()
-                        : (ps == sb2l::ParameterSet::IR) ? eboxes.size()
+    const size_t cached = (cs == sb2l::ParameterSet::R)  ? epoints.size()
+                        : (cs == sb2l::ParameterSet::IR) ? eboxes.size()
                                                          : ezonos.size();
     if ((int)cached != nS) { // nothing to patch: mode just changed, or the last eval failed
         reeval();
@@ -257,9 +259,9 @@ void App::update_control_point(int i)
     }
     try {
         const std::pair<int, int> seg = spline->impacted_segments(i);
-        if (ps == sb2l::ParameterSet::R)
+        if (cs == sb2l::ParameterSet::R)
             spline->update_point(control_points_R(), i, epoints);
-        else if (ps == sb2l::ParameterSet::IR)
+        else if (cs == sb2l::ParameterSet::IR)
             spline->update_box(control_points_IR(), i, eboxes);
         else
             spline->update_zonotope(control_points_Z(), i, ezonos);

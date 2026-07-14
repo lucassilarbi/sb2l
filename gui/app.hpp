@@ -21,7 +21,7 @@
 
 namespace sb2gui {
 
-// One 2D control point. Interpretation depends on the parameter set:
+// One 2D control point. Interpretation depends on the control set:
 //   R : center only.  IR : box center +/- (hx,hy).  Z : center + generators.
 // A zonotope's shape lives entirely in its generators: each one is an arbitrary
 // 2D vector, so both the extent *and* the orientation are edited by moving the
@@ -46,18 +46,27 @@ public:
     int nGen = 2;                      // generators per control point (Z)
     sb2l::CurveType ct = sb2l::CurveType::CLAMPED_NONRATIONAL;
     sb2l::Form f = sb2l::Form::TAYLOR;
+    // Set the B-spline parameter u is taken in: it decides how the basis itself is
+    // evaluated (real samples, interval decomposition, or affine forms), so it is
+    // baked into the SB2 object and changing it costs a rebuild().
     sb2l::ParameterSet ps = sb2l::ParameterSet::IR;
     std::vector<int> wnum, wden;       // rational weights, per control point
+
+    // Set the control points are taken in: it selects eval_point / eval_box /
+    // eval_zonotope on the *same* basis, so it is free of any rebuild (reeval()).
+    // It is independent of ps -- every one of the 9 pairs is a valid B-spline, e.g.
+    // real control points with an interval parameter give the tube of the curve.
+    sb2l::ParameterSet cs = sb2l::ParameterSet::IR;
 
     std::vector<ControlPoint> cps;
 
     // Cached draw geometry (world coordinates), refreshed by reeval().
     // Segment s owns a fixed slice of each container: the d elements at [s*d, s*d + d),
-    // which is what lets a segment be redrawn in place (the R polyline holds one extra
-    // sample at the very end, closing the curve).
-    std::vector<std::vector<Vec2>> polylines; // R: the curve, as a single polyline
-    std::vector<Box> boxes;                    // IR: result boxes
-    std::vector<std::vector<Vec2>> zonos;      // Z: result zonotope polygons
+    // which is what lets a segment be redrawn in place (an R *parameter* evaluates one
+    // extra element at the very end, closing the curve, hence the trailing slot).
+    std::vector<std::vector<Vec2>> polylines; // cs = R: the curve, as a single polyline
+    std::vector<Box> boxes;                    // cs = IR: result boxes
+    std::vector<std::vector<Vec2>> zonos;      // cs = Z: result zonotope polygons
 
     std::string status;                        // last rebuild/eval message
     bool dirty_structural = true;
@@ -78,7 +87,7 @@ private:
     std::unique_ptr<sb2l::SB2> spline;
 
     // Raw evaluation kept per segment, so that a moved control point can be pushed
-    // through the impacted segments only. Exactly one of them is filled, per ps.
+    // through the impacted segments only. Exactly one of them is filled, per cs.
     std::vector<std::vector<std::vector<double>>> epoints;
     std::vector<std::vector<ibex::IntervalVector>> eboxes;
     std::vector<std::vector<ibex::Affine2Vector>> ezonos;
