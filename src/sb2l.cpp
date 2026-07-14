@@ -9,6 +9,8 @@
 
 #include <sb2l.hpp>
 
+#include <algorithm>
+
 #define LWE true // limit wrapping effect when evaluating the B-spline using Z for the parameter set and IR for control points but increase the computation time.
 
 namespace sb2l {
@@ -615,271 +617,222 @@ void SB2::compute_aeBf()
         }
     }
 }
-std::vector<std::vector<std::vector<double>>> SB2::eval_point(const std::vector<std::vector<double>> &P)
+namespace
 {
-    std::vector<std::vector<std::vector<double>>> points = {};
-    std::vector<double> vec(P.size());
+template <typename T> // std::vector<double>, ibex::IntervalVector or ibex::Affine2Vector
+void check_control_points(const std::vector<T> &P, const int n)
+{
     for (size_t dim = 0; dim < P.size(); dim++)
     {
-        if (P[dim].size() < (size_t)(n_ + 1))
+        if ((int)P[dim].size() < n + 1)
             throw std::runtime_error("A control point dimension has fewer than n+1 control points");
     }
-    if (ps_ == ParameterSet::R)
+}
+}
+int SB2::du_count(const int s) const
+{
+    if (ps_ == ParameterSet::R && s == nS_ - 1) // only for real-based B-spline: a last point must be evaluated
+        return d_ + 1;
+    return d_;
+}
+std::pair<int, int> SB2::impacted_segments(const int i) const
+{
+    if (i < 0 || i > n_)
+        return std::pair<int, int>(0, -1); // empty range: i is not a control point index
+    return std::pair<int, int>(std::max(0, i - p_), std::min(nS_ - 1, i));
+}
+void SB2::eval_point_segment(const std::vector<std::vector<double>> &P, const int s, std::vector<std::vector<double>> &points)
+{
+    const int nb = du_count(s);
+    points.assign(nb, std::vector<double>(P.size(), 0.0));
+    for (size_t dim = 0; dim < P.size(); dim++)
     {
-        for (int s = 0; s < nS_; s++)
-        {
-            points.push_back({});
-            for (int du = 0; du < d_; du++)
-            {
-                for (size_t dim = 0; dim < P.size(); dim++)
-                {
-                    double buffer(0.0);
-                    for (int i = s; i < s + p_ + 1; i++)
-                    {
-                        buffer += P[dim][i] * reBf_[s][i][du];
-                    }
-                    vec[dim] = buffer;
-                }
-                points[s].push_back(vec);
-            }
-        }
-        for (size_t dim = 0; dim < P.size(); dim++) // only for real-based B-spline: a last point must be evaluated
+        for (int du = 0; du < nb; du++)
         {
             double buffer(0.0);
-            for (int i = nS_-1; i < n_ + 1; i++)
+            switch (ps_)
             {
-                buffer += P[dim][i] * reBf_[nS_-1][i][d_];
-            }
-            vec[dim] = buffer;
-        }
-        points[nS_-1].push_back(vec);
-    }
-    else if (ps_ == ParameterSet::IR)
-    {
-        for (int s = 0; s < nS_; s++)
-        {
-            points.push_back({});
-            for (int du = 0; du < d_; du++)
-            {
-                for (size_t dim = 0; dim < P.size(); dim++)
+            case ParameterSet::R:
+                for (int i = s; i < s + p_ + 1; i++)
                 {
-                    double buffer(0.0);
-                    for (int i = s; i < s + p_ + 1; i++)
-                    {
-                        buffer += P[dim][i] * ieBf_[s][i][du].mid();
-                    }
-                    vec[dim] = buffer;
+                    buffer += P[dim][i] * reBf_[s][i][du];
                 }
-                points[s].push_back(vec);
-            }
-        }
-    }
-    else if (ps_ == ParameterSet::Z)
-    {
-        for (int s = 0; s < nS_; s++)
-        {
-            points.push_back({});
-            for (int du = 0; du < d_; du++)
-            {
-                for (size_t dim = 0; dim < P.size(); dim++)
+                break;
+            case ParameterSet::IR:
+                for (int i = s; i < s + p_ + 1; i++)
                 {
-                    double buffer(0.0);
-                    for (int i = s; i < s + p_ + 1; i++)
-                    {
-                        buffer += P[dim][i] * aeBf_[s][i][du].mid();
-                    }
-                    vec[dim] = buffer;
+                    buffer += P[dim][i] * ieBf_[s][i][du].mid();
                 }
-                points[s].push_back(vec);
+                break;
+            case ParameterSet::Z:
+                for (int i = s; i < s + p_ + 1; i++)
+                {
+                    buffer += P[dim][i] * aeBf_[s][i][du].mid();
+                }
+                break;
+            default:
+                throw std::runtime_error("Unknown ParameterSet");
             }
+            points[du][dim] = buffer;
         }
     }
-    return points;
 }
-std::vector<std::vector<ibex::IntervalVector>> SB2::eval_box(const std::vector<ibex::IntervalVector> &P)
+void SB2::eval_box_segment(const std::vector<ibex::IntervalVector> &P, const int s, std::vector<ibex::IntervalVector> &boxes)
 {
-    std::vector<std::vector<ibex::IntervalVector>> boxes = {};
-    ibex::IntervalVector box(P.size());
+    const int nb = du_count(s);
+    boxes.assign(nb, ibex::IntervalVector(P.size()));
     for (size_t dim = 0; dim < P.size(); dim++)
     {
-        if (P[dim].size() < n_ + 1)
-            throw std::runtime_error("A control point dimension has fewer than n+1 control points");
-    }
-    if (ps_ == ParameterSet::R)
-    {
-        for (int s = 0; s < nS_; s++)
+        for (int du = 0; du < nb; du++)
         {
-            boxes.push_back({});
-            for (int du = 0; du < d_; du++)
+            switch (ps_)
             {
-                for (size_t dim = 0; dim < P.size(); dim++)
+            case ParameterSet::R:
+            {
+                ibex::Interval buffer(0.0);
+                for (int i = s; i < s + p_ + 1; i++)
                 {
-                    ibex::Interval buffer(0.0);
-                    for (int i = s; i < s + p_ + 1; i++)
-                    {
-                        buffer += P[dim][i] * reBf_[s][i][du];
-                    }
-                    box[dim] = buffer;
+                    buffer += P[dim][i] * reBf_[s][i][du];
                 }
-                boxes[s].push_back(box);
+                boxes[du][dim] = buffer;
+                break;
             }
-        }
-        for (size_t dim = 0; dim < P.size(); dim++) // only for real-based B-spline: a last point must be evaluated
-        {
-            ibex::Interval buffer(0.0);
-            for (int i = nS_-1; i < n_ + 1; i++)
+            case ParameterSet::IR:
             {
-                buffer += P[dim][i] * reBf_[nS_-1][i][d_];
-            }
-            box[dim] = buffer;
-        }
-        boxes[nS_-1].push_back(box);
-    }
-    if (ps_ == ParameterSet::IR)
-    {
-        for (int s = 0; s < nS_; s++)
-        {
-            boxes.push_back({});
-            for (int du = 0; du < d_; du++)
-            {
-                for (size_t dim = 0; dim < P.size(); dim++)
+                ibex::Interval buffer(0.0);
+                for (int i = s; i < s + p_ + 1; i++)
                 {
-                    ibex::Interval buffer(0.0);
-                    for (int i = s; i < s + p_ + 1; i++)
-                    {
-                        buffer += P[dim][i] * ieBf_[s][i][du];
-                    }
-                    box[dim] = buffer;
+                    buffer += P[dim][i] * ieBf_[s][i][du];
                 }
-                boxes[s].push_back(box);
+                boxes[du][dim] = buffer;
+                break;
             }
-        }
-    }
-    if (ps_ == ParameterSet::Z)
-    {
-        if (LWE)
-        {
-            for (int s = 0; s < nS_; s++) // here the basis and the final B-spline are computed using affine arithmetic and then the hull is extracted (reduce the wrapping effect)
+            case ParameterSet::Z:
             {
-                boxes.push_back({});
-                for (int du = 0; du < d_; du++)
-                {
-                    for (size_t dim = 0; dim < P.size(); dim++)
-                    {
-                        ibex::Affine2 buffer(0.0);
-                        for (int i = s; i < s + p_ + 1; i++)
-                        {
-                            buffer += P[dim][i] * aeBf_[s][i][du];
-                        }
-                        box[dim] = buffer.itv(); // hull extraction
-                    }
-                    boxes[s].push_back(box);
-                }
-            }
-        }
-        else
-        {
-            for (int s = 0; s < nS_; s++) // here the basis is computed using affine arithmetic and then the hull is extracted to compute the final B-spline
-            {
-                boxes.push_back({});
-                for (int du = 0; du < d_; du++)
-                {
-                    for (size_t dim = 0; dim < P.size(); dim++)
-                    {
-                        ibex::Interval buffer(0.0);
-                        for (int i = s; i < s + p_ + 1; i++)
-                        {
-                            buffer += P[dim][i] * aeBf_[s][i][du].itv(); // hull extraction
-                        }
-                        box[dim] = buffer;
-                    }
-                    boxes[s].push_back(box);
-                }
-            }
-        }
-    }
-    return boxes;
-}
-std::vector<std::vector<ibex::Affine2Vector>> SB2::eval_zonotope(const std::vector<ibex::Affine2Vector> &P)
-{
-    std::vector<std::vector<ibex::Affine2Vector>> zonotopes = {};
-    ibex::Affine2Vector zon(P.size());
-    for (size_t dim = 0; dim < P.size(); dim++)
-    {
-        if (P[dim].size() < n_ + 1)
-            throw std::runtime_error("A control point dimension has fewer than n+1 control points");
-    }
-    if (ps_ == ParameterSet::R)
-    {
-        for (int s = 0; s < nS_; s++)
-        {
-            zonotopes.push_back({});
-            for (int du = 0; du < d_; du++)
-            {
-                for (size_t dim = 0; dim < P.size(); dim++)
-                {
-                    ibex::Affine2 buffer(0.0);
-                    for (int i = s; i < s + p_ + 1; i++)
-                    {
-                        buffer += P[dim][i] * reBf_[s][i][du];
-                    }
-                    zon[dim] = buffer;
-                }
-                zonotopes[s].push_back(zon);
-            }
-        }
-        for (size_t dim = 0; dim < P.size(); dim++) // only for real-based B-spline: a last point must be evaluated
-        {
-            ibex::Affine2 buffer(0.0);
-            for (int i = nS_-1; i < n_ + 1; i++)
-            {
-                buffer += P[dim][i] * reBf_[nS_-1][i][d_];
-            }
-            zon[dim] = buffer;
-        }
-        zonotopes[nS_-1].push_back(zon);
-    }
-    if (ps_ == ParameterSet::IR)
-    {
-        for (int s = 0; s < nS_; s++)
-        {
-            zonotopes.push_back({});
-            for (int du = 0; du < d_; du++)
-            {
-                for (size_t dim = 0; dim < P.size(); dim++)
-                {
-                    ibex::Affine2 buffer(0.0);
-                    for (int i = s; i < s + p_ + 1; i++)
-                    {
-                        buffer += P[dim][i] * ieBf_[s][i][du];
-                    }
-                    zon[dim] = buffer;
-                }
-                zonotopes[s].push_back(zon);
-            }
-        }
-    }
-    if (ps_ == ParameterSet::Z)
-    {
-        for (int s = 0; s < nS_; s++)
-        {
-            zonotopes.push_back({});
-            for (int du = 0; du < d_; du++)
-            {
-                for (size_t dim = 0; dim < P.size(); dim++)
+                if (LWE) // here the basis and the final B-spline are computed using affine arithmetic and then the hull is extracted (reduce the wrapping effect)
                 {
                     ibex::Affine2 buffer(0.0);
                     for (int i = s; i < s + p_ + 1; i++)
                     {
                         buffer += P[dim][i] * aeBf_[s][i][du];
                     }
-                    zon[dim] = buffer;
+                    boxes[du][dim] = buffer.itv(); // hull extraction
                 }
-                zonotopes[s].push_back(zon);
+                else // here the basis is computed using affine arithmetic and then the hull is extracted to compute the final B-spline
+                {
+                    ibex::Interval buffer(0.0);
+                    for (int i = s; i < s + p_ + 1; i++)
+                    {
+                        buffer += P[dim][i] * aeBf_[s][i][du].itv(); // hull extraction
+                    }
+                    boxes[du][dim] = buffer;
+                }
+                break;
+            }
+            default:
+                throw std::runtime_error("Unknown ParameterSet");
             }
         }
     }
+}
+void SB2::eval_zonotope_segment(const std::vector<ibex::Affine2Vector> &P, const int s, std::vector<ibex::Affine2Vector> &zonotopes)
+{
+    const int nb = du_count(s);
+    zonotopes.assign(nb, ibex::Affine2Vector(P.size()));
+    for (size_t dim = 0; dim < P.size(); dim++)
+    {
+        for (int du = 0; du < nb; du++)
+        {
+            ibex::Affine2 buffer(0.0);
+            switch (ps_)
+            {
+            case ParameterSet::R:
+                for (int i = s; i < s + p_ + 1; i++)
+                {
+                    buffer += P[dim][i] * reBf_[s][i][du];
+                }
+                break;
+            case ParameterSet::IR:
+                for (int i = s; i < s + p_ + 1; i++)
+                {
+                    buffer += P[dim][i] * ieBf_[s][i][du];
+                }
+                break;
+            case ParameterSet::Z:
+                for (int i = s; i < s + p_ + 1; i++)
+                {
+                    buffer += P[dim][i] * aeBf_[s][i][du];
+                }
+                break;
+            default:
+                throw std::runtime_error("Unknown ParameterSet");
+            }
+            zonotopes[du][dim] = buffer;
+        }
+    }
+}
+std::vector<std::vector<std::vector<double>>> SB2::eval_point(const std::vector<std::vector<double>> &P)
+{
+    check_control_points(P, n_);
+    std::vector<std::vector<std::vector<double>>> points(nS_);
+    for (int s = 0; s < nS_; s++)
+    {
+        eval_point_segment(P, s, points[s]);
+    }
+    return points;
+}
+std::vector<std::vector<ibex::IntervalVector>> SB2::eval_box(const std::vector<ibex::IntervalVector> &P)
+{
+    check_control_points(P, n_);
+    std::vector<std::vector<ibex::IntervalVector>> boxes(nS_);
+    for (int s = 0; s < nS_; s++)
+    {
+        eval_box_segment(P, s, boxes[s]);
+    }
+    return boxes;
+}
+std::vector<std::vector<ibex::Affine2Vector>> SB2::eval_zonotope(const std::vector<ibex::Affine2Vector> &P)
+{
+    check_control_points(P, n_);
+    std::vector<std::vector<ibex::Affine2Vector>> zonotopes(nS_);
+    for (int s = 0; s < nS_; s++)
+    {
+        eval_zonotope_segment(P, s, zonotopes[s]);
+    }
     return zonotopes;
+}
+void SB2::update_point(const std::vector<std::vector<double>> &P, const int i, std::vector<std::vector<std::vector<double>>> &points)
+{
+    check_control_points(P, n_);
+    if ((int)points.size() != nS_)
+        throw std::runtime_error("The elements to update do not come from this B-spline");
+    const std::pair<int, int> seg = impacted_segments(i);
+    for (int s = seg.first; s <= seg.second; s++)
+    {
+        eval_point_segment(P, s, points[s]);
+    }
+}
+void SB2::update_box(const std::vector<ibex::IntervalVector> &P, const int i, std::vector<std::vector<ibex::IntervalVector>> &boxes)
+{
+    check_control_points(P, n_);
+    if ((int)boxes.size() != nS_)
+        throw std::runtime_error("The elements to update do not come from this B-spline");
+    const std::pair<int, int> seg = impacted_segments(i);
+    for (int s = seg.first; s <= seg.second; s++)
+    {
+        eval_box_segment(P, s, boxes[s]);
+    }
+}
+void SB2::update_zonotope(const std::vector<ibex::Affine2Vector> &P, const int i, std::vector<std::vector<ibex::Affine2Vector>> &zonotopes)
+{
+    check_control_points(P, n_);
+    if ((int)zonotopes.size() != nS_)
+        throw std::runtime_error("The elements to update do not come from this B-spline");
+    const std::pair<int, int> seg = impacted_segments(i);
+    for (int s = seg.first; s <= seg.second; s++)
+    {
+        eval_zonotope_segment(P, s, zonotopes[s]);
+    }
 }
 
 }

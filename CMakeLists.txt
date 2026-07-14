@@ -36,8 +36,13 @@ ExternalProject_Add(dynibex_ext
     INSTALL_COMMAND python3 waf3.py install
     BUILD_IN_SOURCE 1
 )
-add_library(filib STATIC IMPORTED GLOBAL)
-set_target_properties(filib PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/3rd/dynibex-2.3/lib/libprim.a")
+# Dynibex only builds and installs its own filib (libprim) when it cannot find one
+# already installed on the system. After a first `make install`, /usr/local holds a
+# filib, so later builds reuse it and no libprim.a appears in the build tree. Link
+# with -lprim, preferring the build tree, so both cases work.
+add_library(filib INTERFACE)
+target_link_directories(filib INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/3rd/dynibex-2.3/lib")
+target_link_libraries(filib INTERFACE prim)
 add_dependencies(filib dynibex_ext)
 add_library(ibex STATIC IMPORTED GLOBAL)
 set_target_properties(ibex PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/3rd/dynibex-2.3/lib/libibex.a")

@@ -7,6 +7,8 @@ namespace sb2gui {
 
 static const float kPanelWidth = 320.0f; // Controls window width
 
+// AABB half-widths of a zonotope. For view fitting only: this loses the
+// orientation, so it must not drive editing.
 static void zono_extent(const ControlPoint& cp, double& ex, double& ey)
 {
     ex = 0.0; ey = 0.0;
@@ -16,6 +18,19 @@ static void zono_extent(const ControlPoint& cp, double& ex, double& ey)
 static float dist(ImVec2 a, ImVec2 b)
 {
     return std::sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
+}
+
+// Inside test for a CCW convex polygon (the zonotope boundary is already CCW).
+static bool inside_ccw(const std::vector<Vec2>& poly, double x, double y)
+{
+    const size_t n = poly.size();
+    if (n < 3) return false;
+    for (size_t i = 0; i < n; ++i) {
+        const Vec2& a = poly[i];
+        const Vec2& b = poly[(i + 1) % n];
+        if ((b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x) < 0.0) return false;
+    }
+    return true;
 }
 
 // ---------------------------------------------------------------- controls ---
@@ -45,6 +60,9 @@ void Editor::draw_controls_window()
     if (ImGui::Combo("form", &f, forms, 2)) { a.f = (sb2l::Form)f; changed = true; }
     if (ImGui::Combo("parameter set", &ps, psets, 3)) { a.ps = (sb2l::ParameterSet)ps; changed = true; }
 
+    if (a.ps == sb2l::ParameterSet::Z)
+        changed |= ImGui::SliderInt("generators / point", &a.nGen, 1, 6);
+
     bool rational = (a.ct == sb2l::CurveType::UNIFORM_RATIONAL ||
                      a.ct == sb2l::CurveType::CLAMPED_RATIONAL);
     if (rational) {
@@ -68,8 +86,10 @@ void Editor::draw_controls_window()
 
     ImGui::Separator();
     if (ImGui::Button("Fit view")) fit_view();
-    ImGui::TextWrapped("Drag control handles to edit. In box/zonotope modes, drag inside "
-                       "to move and drag a corner to resize. Wheel zooms, drag empty space pans.");
+    ImGui::TextWrapped("Drag control handles to edit. Box mode: drag inside to move, drag a corner "
+                       "to resize. Zonotope mode: drag inside to move, drag a yellow generator tip "
+                       "to set its direction and length (that is how you rotate/shear the shape). "
+                       "Wheel zooms, drag empty space pans.");
     ImGui::Text("segments: %d   status: %s", a.nSegments(), a.status.c_str());
     ImGui::End();
 }
@@ -111,13 +131,15 @@ Editor::Selection Editor::hit_test(ImVec2 m) const
                                                   a.cps[i].cy + sy * a.cps[i].hy)) < r)
                         return {Kind::BoxCorner, i, sx, sy};
     } else if (a.ps == sb2l::ParameterSet::Z) {
+        // Generator tips: each one is free in direction and length, which is
+        // what lets a zonotope be reoriented rather than merely rescaled.
         for (int i = 0; i < (int)a.cps.size(); ++i) {
-            double ex, ey; zono_extent(a.cps[i], ex, ey);
-            for (int sx = -1; sx <= 1; sx += 2)
-                for (int sy = -1; sy <= 1; sy += 2)
-                    if (dist(m, canvas_.to_screen(a.cps[i].cx + sx * ex,
-                                                  a.cps[i].cy + sy * ey)) < r)
-                        return {Kind::ZonoCorner, i, sx, sy};
+            const ControlPoint& c = a.cps[i];
+            for (int k = 0; k < (int)c.gens.size(); ++k)
+                for (int s = -1; s <= 1; s += 2)
+                    if (dist(m, canvas_.to_screen(c.cx + s * c.gens[k].x,
+                                                  c.cy + s * c.gens[k].y)) < r)
+                        return {Kind::ZonoGen, i, s, 0, k};
         }
     }
     // Bodies / centers.
@@ -130,8 +152,10 @@ Editor::Selection Editor::hit_test(ImVec2 m) const
             if (wx >= c.cx - c.hx && wx <= c.cx + c.hx && wy >= c.cy - c.hy && wy <= c.cy + c.hy)
                 return {Kind::BoxBody, i, 0, 0};
         } else {
-            double ex, ey; zono_extent(c, ex, ey);
-            if (wx >= c.cx - ex && wx <= c.cx + ex && wy >= c.cy - ey && wy <= c.cy + ey)
+            // Test the true polygon, not its bounding box: a rotated zonotope
+            // is much smaller than its AABB and must not grab clicks outside it.
+            if (inside_ccw(zonotope_boundary({c.cx, c.cy}, c.gens), wx, wy) ||
+                dist(m, canvas_.to_screen(c.cx, c.cy)) < r + 2)
                 return {Kind::ZonoBody, i, 0, 0};
         }
     }
@@ -162,19 +186,24 @@ void Editor::drag(const Selection& s)
         c.cx = 0.5 * (mx + opx); c.cy = 0.5 * (my + opy);
         break;
     }
-    case Kind::ZonoCorner: {
-        double ex, ey; zono_extent(c, ex, ey);
-        double opx = c.cx - s.sx * ex, opy = c.cy - s.sy * ey;
-        double nex = std::fabs(mx - opx) * 0.5, ney = std::fabs(my - opy) * 0.5;
-        double fx = ex > 1e-9 ? nex / ex : 1.0;
-        double fy = ey > 1e-9 ? ney / ey : 1.0;
-        for (Vec2& g : c.gens) { g.x *= fx; g.y *= fy; }
-        c.cx = 0.5 * (mx + opx); c.cy = 0.5 * (my + opy);
+    case Kind::ZonoGen: {
+        // The grabbed tip is c + s.sx * g, so the mouse fixes the generator
+        // outright: direction and length both follow the cursor.
+        Vec2& g = c.gens[s.gen];
+        double gx = s.sx * (mx - c.cx), gy = s.sx * (my - c.cy);
+        double len = std::sqrt(gx * gx + gy * gy);
+        if (len < 1e-4) { // never let a generator collapse to an unrecoverable zero
+            double plen = std::sqrt(g.x * g.x + g.y * g.y);
+            if (plen > 1e-12) { gx = 1e-4 * g.x / plen; gy = 1e-4 * g.y / plen; }
+            else { gx = 1e-4; gy = 0.0; }
+        }
+        g.x = gx; g.y = gy;
         break;
     }
     default: return;
     }
-    a.reeval();
+    // Only the dragged control point moved, so only its p+1 segments need it.
+    a.update_control_point(s.index);
 }
 
 void Editor::handle_input()
@@ -204,6 +233,7 @@ void Editor::draw_scene(ImDrawList* dl) const
     const ImU32 col_zono = IM_COL32(230, 90, 90, 255);
     const ImU32 col_zono_f = IM_COL32(230, 90, 90, 45);
     const ImU32 col_handle = IM_COL32(80, 150, 240, 255);
+    const ImU32 col_gen = IM_COL32(240, 200, 90, 255);
 
     // Axes.
     ImVec2 o = canvas_.to_screen(0, 0);
@@ -260,12 +290,14 @@ void Editor::draw_scene(ImDrawList* dl) const
                 for (const Vec2& q : b) pts.push_back(canvas_.to_screen(q.x, q.y));
                 dl->AddPolyline(pts.data(), (int)pts.size(), col_handle, ImDrawFlags_Closed, 1.0f);
             }
-            double ex, ey; zono_extent(c, ex, ey);
-            for (int sx = -1; sx <= 1; sx += 2)
-                for (int sy = -1; sy <= 1; sy += 2) {
-                    ImVec2 p = canvas_.to_screen(c.cx + sx * ex, c.cy + sy * ey);
-                    dl->AddRectFilled(ImVec2(p.x - 3, p.y - 3), ImVec2(p.x + 3, p.y + 3), col_handle);
-                }
+            // One spoke per generator, grabbable at either tip.
+            for (const Vec2& g : c.gens) {
+                ImVec2 tp = canvas_.to_screen(c.cx + g.x, c.cy + g.y);
+                ImVec2 tm = canvas_.to_screen(c.cx - g.x, c.cy - g.y);
+                dl->AddLine(tm, tp, col_gen, 1.0f);
+                dl->AddCircleFilled(tp, 4.0f, col_gen);
+                dl->AddCircleFilled(tm, 4.0f, col_gen);
+            }
         }
         dl->AddCircleFilled(ctr, 4.0f, col_handle);
     }

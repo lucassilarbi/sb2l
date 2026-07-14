@@ -6,10 +6,16 @@
 
 namespace sb2gui {
 
-// Default generators for a fresh zonotope control point (a small parallelogram).
-static std::vector<Vec2> default_gens()
+// Default generators for a fresh zonotope control point: n directions evenly
+// spread over a half-turn (n = 2 gives the usual small square).
+static std::vector<Vec2> default_gens(int n)
 {
-    return {{0.12, 0.04}, {-0.04, 0.12}};
+    std::vector<Vec2> g;
+    for (int k = 0; k < n; ++k) {
+        double th = 3.14159265358979 * k / (n > 0 ? n : 1);
+        g.push_back({0.12 * std::cos(th), 0.12 * std::sin(th)});
+    }
+    return g;
 }
 
 App::App()
@@ -27,7 +33,7 @@ void App::seed_default_scene()
         cp.cx = 0.3 + 2.6 * u;
         cp.cy = 1.5 + 1.0 * std::sin(u * 3.14159265 * 1.5);
         cp.hx = cp.hy = 0.1;
-        cp.gens = default_gens();
+        cp.gens = default_gens(nGen);
         cps.push_back(cp);
     }
 }
@@ -41,11 +47,18 @@ void App::resize_control_points()
             cp.cx = prev.cx + 0.3;
             cp.cy = prev.cy;
             cp.hx = cp.hy = 0.1;
-            cp.gens = default_gens();
+            cp.gens = default_gens(nGen);
             cps.push_back(cp);
         }
     } else if ((int)cps.size() > nCP) {
         cps.resize(nCP);
+    }
+    // Keep every point at nGen generators, preserving the ones already edited.
+    for (ControlPoint& cp : cps) {
+        if ((int)cp.gens.size() == nGen) continue;
+        std::vector<Vec2> fresh = default_gens(nGen);
+        for (int k = 0; k < nGen && k < (int)cp.gens.size(); ++k) fresh[k] = cp.gens[k];
+        cp.gens = std::move(fresh);
     }
     wnum.resize(nCP, 1);
     wden.resize(nCP, 1);
@@ -56,6 +69,7 @@ void App::rebuild()
     if (p < 1) p = 1;
     if (nCP < p + 1) nCP = p + 1;
     if (d < 1) d = 1;
+    if (nGen < 1) nGen = 1;
     resize_control_points();
 
     try {
@@ -68,9 +82,9 @@ void App::rebuild()
                 W.push_back(SymEngine::Expression(num) / SymEngine::Expression(den));
             }
         }
-        // Track generators precisely in affine mode (fast boundary removes the
-        // old 2^m concern, so we can afford a generous noise budget).
-        ibex::AF_fAFFullI::setAffineNoiseNumber(2 * nCP + 16);
+        // One independent noise symbol per generator of every control point,
+        // plus room for the ones the evaluation introduces itself.
+        ibex::AF_fAFFullI::setAffineNoiseNumber(nCP * nGen + 16);
 
         spline.reset(new sb2l::SB2(p, nCP, ct, f, ps, d, t, W));
         dirty_structural = false;
@@ -78,6 +92,9 @@ void App::rebuild()
         reeval();
     } catch (const std::exception& e) {
         spline.reset();
+        epoints.clear();
+        eboxes.clear();
+        ezonos.clear();
         polylines.clear();
         boxes.clear();
         zonos.clear();
@@ -105,50 +122,128 @@ static std::vector<Vec2> zono_from_affine(ibex::Affine2Vector v)
     return zonotope_boundary(c, gens);
 }
 
-void App::reeval()
+std::vector<std::vector<double>> App::control_points_R() const
 {
-    if (!spline) return;
+    std::vector<std::vector<double>> P(2, std::vector<double>(nCP));
+    for (int i = 0; i < nCP; ++i) { P[0][i] = cps[i].cx; P[1][i] = cps[i].cy; }
+    return P;
+}
+
+std::vector<ibex::IntervalVector> App::control_points_IR() const
+{
+    std::vector<ibex::IntervalVector> P(2, ibex::IntervalVector(nCP));
+    for (int i = 0; i < nCP; ++i) {
+        P[0][i] = ibex::Interval(cps[i].cx - cps[i].hx, cps[i].cx + cps[i].hx);
+        P[1][i] = ibex::Interval(cps[i].cy - cps[i].hy, cps[i].cy + cps[i].hy);
+    }
+    return P;
+}
+
+std::vector<ibex::Affine2Vector> App::control_points_Z() const
+{
+    std::vector<ibex::Affine2Vector> P(2, ibex::Affine2Vector(nCP));
+    for (int i = 0; i < nCP; ++i) {
+        ibex::Affine2 ax(cps[i].cx), ay(cps[i].cy);
+        for (const Vec2& g : cps[i].gens) {
+            ibex::Affine2 e(ibex::Interval(-1, 1)); // fresh independent noise
+            ax += g.x * e;
+            ay += g.y * e;
+        }
+        P[0][i] = ax;
+        P[1][i] = ay;
+    }
+    return P;
+}
+
+void App::alloc_geometry()
+{
+    const int nS = spline->get_nS(), d = spline->get_d();
     polylines.clear();
     boxes.clear();
     zonos.clear();
-    try {
+    if (ps == sb2l::ParameterSet::R) {
+        // One continuous polyline: joining the segments end-to-end removes the
+        // gaps between per-segment sample runs. The last segment carries the
+        // closing sample, hence the +1.
+        polylines.assign(1, std::vector<Vec2>(nS * d + 1));
+    } else if (ps == sb2l::ParameterSet::IR) {
+        boxes.assign(nS * d, Box{});
+    } else {
+        zonos.assign(nS * d, std::vector<Vec2>());
+    }
+}
+
+void App::refresh_geometry(int s0, int s1)
+{
+    const int nS = spline->get_nS(), d = spline->get_d();
+    if (s0 < 0) s0 = 0;
+    if (s1 > nS - 1) s1 = nS - 1;
+    for (int s = s0; s <= s1; ++s) {
         if (ps == sb2l::ParameterSet::R) {
-            std::vector<std::vector<double>> P(2, std::vector<double>(nCP));
-            for (int i = 0; i < nCP; ++i) { P[0][i] = cps[i].cx; P[1][i] = cps[i].cy; }
-            auto pts = spline->eval_point(P);
-            // One continuous polyline: joining segments end-to-end removes the
-            // gaps between per-segment sample runs.
-            std::vector<Vec2> line;
-            for (auto& seg : pts)
-                for (auto& q : seg) line.push_back({q[0], q[1]});
-            if (line.size() >= 2) polylines.push_back(std::move(line));
+            const std::vector<std::vector<double>>& seg = epoints[s];
+            for (size_t du = 0; du < seg.size(); ++du)
+                polylines[0][s * d + du] = {seg[du][0], seg[du][1]};
         } else if (ps == sb2l::ParameterSet::IR) {
-            std::vector<ibex::IntervalVector> P(2, ibex::IntervalVector(nCP));
-            for (int i = 0; i < nCP; ++i) {
-                P[0][i] = ibex::Interval(cps[i].cx - cps[i].hx, cps[i].cx + cps[i].hx);
-                P[1][i] = ibex::Interval(cps[i].cy - cps[i].hy, cps[i].cy + cps[i].hy);
+            const std::vector<ibex::IntervalVector>& seg = eboxes[s];
+            for (size_t du = 0; du < seg.size(); ++du) {
+                const ibex::IntervalVector& b = seg[du];
+                boxes[s * d + du] = {b[0].lb(), b[1].lb(), b[0].ub(), b[1].ub()};
             }
-            auto bx = spline->eval_box(P);
-            for (auto& seg : bx)
-                for (auto& b : seg)
-                    boxes.push_back({b[0].lb(), b[1].lb(), b[0].ub(), b[1].ub()});
-        } else { // Z
-            std::vector<ibex::Affine2Vector> aP(2, ibex::Affine2Vector(nCP));
-            for (int i = 0; i < nCP; ++i) {
-                ibex::Affine2 ax(cps[i].cx), ay(cps[i].cy);
-                for (const Vec2& g : cps[i].gens) {
-                    ibex::Affine2 e(ibex::Interval(-1, 1)); // fresh independent noise
-                    ax += g.x * e;
-                    ay += g.y * e;
-                }
-                aP[0][i] = ax;
-                aP[1][i] = ay;
-            }
-            auto zs = spline->eval_zonotope(aP);
-            for (auto& seg : zs)
-                for (auto& z : seg)
-                    zonos.push_back(zono_from_affine(z));
+        } else {
+            const std::vector<ibex::Affine2Vector>& seg = ezonos[s];
+            for (size_t du = 0; du < seg.size(); ++du)
+                zonos[s * d + du] = zono_from_affine(seg[du]);
         }
+    }
+}
+
+void App::reeval()
+{
+    if (!spline) return;
+    epoints.clear();
+    eboxes.clear();
+    ezonos.clear();
+    try {
+        if (ps == sb2l::ParameterSet::R)
+            epoints = spline->eval_point(control_points_R());
+        else if (ps == sb2l::ParameterSet::IR)
+            eboxes = spline->eval_box(control_points_IR());
+        else
+            ezonos = spline->eval_zonotope(control_points_Z());
+        alloc_geometry();
+        refresh_geometry(0, spline->get_nS() - 1);
+        status = "OK";
+    } catch (const std::exception& e) {
+        epoints.clear();
+        eboxes.clear();
+        ezonos.clear();
+        polylines.clear();
+        boxes.clear();
+        zonos.clear();
+        status = std::string("eval failed: ") + e.what();
+    }
+}
+
+void App::update_control_point(int i)
+{
+    if (!spline) return;
+    const int nS = spline->get_nS();
+    const size_t cached = (ps == sb2l::ParameterSet::R)  ? epoints.size()
+                        : (ps == sb2l::ParameterSet::IR) ? eboxes.size()
+                                                         : ezonos.size();
+    if ((int)cached != nS) { // nothing to patch: mode just changed, or the last eval failed
+        reeval();
+        return;
+    }
+    try {
+        const std::pair<int, int> seg = spline->impacted_segments(i);
+        if (ps == sb2l::ParameterSet::R)
+            spline->update_point(control_points_R(), i, epoints);
+        else if (ps == sb2l::ParameterSet::IR)
+            spline->update_box(control_points_IR(), i, eboxes);
+        else
+            spline->update_zonotope(control_points_Z(), i, ezonos);
+        refresh_geometry(seg.first, seg.second);
         status = "OK";
     } catch (const std::exception& e) {
         status = std::string("eval failed: ") + e.what();

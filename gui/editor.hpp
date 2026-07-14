@@ -17,11 +17,12 @@ public:
     void draw_canvas_window();
 
 private:
-    enum class Kind { None, Point, BoxBody, BoxCorner, ZonoBody, ZonoCorner };
+    enum class Kind { None, Point, BoxBody, BoxCorner, ZonoBody, ZonoGen };
     struct Selection {
         Kind kind = Kind::None;
         int index = -1;
-        int sx = 0, sy = 0; // grabbed-corner signs (+/-1)
+        int sx = 0, sy = 0; // grabbed-corner signs (+/-1); ZonoGen uses sx only
+        int gen = -1;       // grabbed generator (ZonoGen)
     };
 
     App& app_;
