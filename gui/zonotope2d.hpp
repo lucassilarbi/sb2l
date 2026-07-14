@@ -41,8 +41,11 @@ inline std::vector<Vec2> zonotope_boundary(const Vec2& c, const std::vector<Vec2
     }
     if (g.empty()) return {c};
 
+    // Every generator now lies in the half-plane [0, pi), so a positive cross
+    // product is exactly "a has the smaller angle" -- same order as comparing
+    // atan2, without a transcendental call per comparison.
     std::sort(g.begin(), g.end(), [](const Vec2& a, const Vec2& b) {
-        return std::atan2(a.y, a.x) < std::atan2(b.y, b.x);
+        return a.x * b.y - a.y * b.x > 0.0;
     });
 
     // Start at the bottom-most vertex: c minus the sum of all generators.

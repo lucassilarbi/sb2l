@@ -1,6 +1,7 @@
 #include "app.hpp"
 
 #include <cmath>
+#include <list>
 #include <stdexcept>
 #include <utility>
 
@@ -103,18 +104,32 @@ void App::rebuild()
 }
 
 // Boundary polygon of a 2D affine vector (center + generators + error box).
-static std::vector<Vec2> zono_from_affine(ibex::Affine2Vector v)
+// Takes the form already compacted: it is read by reference, so that drawing a
+// zonotope does not deep-copy its noise-term lists every frame.
+static std::vector<Vec2> zono_from_affine(const ibex::Affine2Vector& v)
 {
-    v.compact();
     Vec2 c{v[0].val(0), v[1].val(0)};
-    int n = v[0].size();
-    if (v[1].size() > n) n = v[1].size();
+
+    // Both coordinates draw on the same noise symbols but each stores only its
+    // own nonzero terms, so walk the two index-sorted lists together and emit
+    // one generator per symbol either of them uses.
+    //
+    // Do not iterate k = 1 .. size() calling val(k) instead: noise indices come
+    // from a global counter that every affine multiplication bumps and nothing
+    // ever resets, so size() is a symbol index in the millions after a few
+    // seconds of dragging, not a term count, and that loop grows without bound.
+    const std::list<std::pair<int, double> >& rx = v[0].rays();
+    const std::list<std::pair<int, double> >& ry = v[1].rays();
     std::vector<Vec2> gens;
-    gens.reserve(n + 2);
-    for (int k = 1; k <= n; ++k) {
-        double gx = (k <= v[0].size()) ? v[0].val(k) : 0.0;
-        double gy = (k <= v[1].size()) ? v[1].val(k) : 0.0;
-        gens.push_back({gx, gy});
+    gens.reserve(rx.size() + ry.size() + 2);
+    std::list<std::pair<int, double> >::const_iterator ix = rx.begin(), iy = ry.begin();
+    while (ix != rx.end() || iy != ry.end()) {
+        if (iy == ry.end() || (ix != rx.end() && ix->first < iy->first))
+            gens.push_back({(ix++)->second, 0.0});
+        else if (ix == rx.end() || iy->first < ix->first)
+            gens.push_back({0.0, (iy++)->second});
+        else
+            gens.push_back({(ix++)->second, (iy++)->second});
     }
     // Accumulated error terms as axis-aligned generators (keeps over-approx).
     if (v[0].err() > 0.0) gens.push_back({v[0].err(), 0.0});
@@ -190,9 +205,14 @@ void App::refresh_geometry(int s0, int s1)
                 boxes[s * d + du] = {b[0].lb(), b[1].lb(), b[0].ub(), b[1].ub()};
             }
         } else {
-            const std::vector<ibex::Affine2Vector>& seg = ezonos[s];
-            for (size_t du = 0; du < seg.size(); ++du)
+            // Compact in place: eval/update_zonotope always rewrites these forms
+            // wholesale before they are read again, so dropping their negligible
+            // noise terms here costs nothing and keeps the polygons small.
+            std::vector<ibex::Affine2Vector>& seg = ezonos[s];
+            for (size_t du = 0; du < seg.size(); ++du) {
+                seg[du].compact();
                 zonos[s * d + du] = zono_from_affine(seg[du]);
+            }
         }
     }
 }

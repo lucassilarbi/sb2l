@@ -254,6 +254,18 @@ public:
 
 	void initialize(double center, std::list<std::pair<int,double> > rays, Interval garbage);
 
+	/**
+	 * \brief the sparse noise terms, sorted by increasing noise index.
+	 *
+	 * Counterpart of initialize(). Callers that need every generator must walk
+	 * this list: noise indices come from a global, never-reset counter, so they
+	 * are unrelated to the term count and size() is an index, not a count.
+	 * Probing val(k) for k in [1, size()] is therefore O(global counter) and
+	 * degrades without bound as more affine forms are built.
+	 * Only specialized for AF_fAFFullI, the only sparse-list representation.
+	 */
+	const std::list<std::pair<int,double> >& rays() const;
+
 	/** \brief Add \a d to *this and return the result.  */
 	Affine2Main& operator+=(double d);
 

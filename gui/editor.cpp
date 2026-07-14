@@ -33,6 +33,32 @@ static bool inside_ccw(const std::vector<Vec2>& poly, double x, double y)
     return true;
 }
 
+// Project a world polygon to screen, skipping a vertex that lands within half a
+// pixel of the one before it. A result zonotope carries one vertex pair per noise
+// symbol -- hundreds of them once the degree and generator count go up -- and at
+// screen scale nearly all of those edges are far shorter than a pixel: they cost
+// ImGui vertices every frame without changing a single rendered pixel. Dropping
+// them keeps the outline and stays convex, so the fill path still applies.
+void Editor::to_screen_poly(const std::vector<Vec2>& world) const
+{
+    const float min_d2 = 0.25f; // (0.5 px)^2
+    pts_.clear();
+    pts_.reserve(world.size());
+    for (const Vec2& q : world) {
+        const ImVec2 p = canvas_.to_screen(q.x, q.y);
+        if (!pts_.empty()) {
+            const float dx = p.x - pts_.back().x, dy = p.y - pts_.back().y;
+            if (dx * dx + dy * dy < min_d2) continue;
+        }
+        pts_.push_back(p);
+    }
+    // The polygon is closed, so a last vertex sitting on the first is redundant too.
+    if (pts_.size() >= 2) {
+        const float dx = pts_.back().x - pts_.front().x, dy = pts_.back().y - pts_.front().y;
+        if (dx * dx + dy * dy < min_d2) pts_.pop_back();
+    }
+}
+
 // ---------------------------------------------------------------- controls ---
 
 void Editor::draw_controls_window()
@@ -264,11 +290,15 @@ void Editor::draw_scene(ImDrawList* dl) const
     }
     for (const std::vector<Vec2>& z : a.zonos) {
         if (z.size() < 2) continue;
-        std::vector<ImVec2> pts;
-        pts.reserve(z.size());
-        for (const Vec2& q : z) pts.push_back(canvas_.to_screen(q.x, q.y));
-        if (pts.size() >= 3) dl->AddConvexPolyFilled(pts.data(), (int)pts.size(), col_zono_f);
-        dl->AddPolyline(pts.data(), (int)pts.size(), col_zono, ImDrawFlags_Closed, 1.5f);
+        to_screen_poly(z);
+        if (pts_.size() >= 3) {
+            dl->AddConvexPolyFilled(pts_.data(), (int)pts_.size(), col_zono_f);
+            dl->AddPolyline(pts_.data(), (int)pts_.size(), col_zono, ImDrawFlags_Closed, 1.5f);
+        } else if (!pts_.empty()) {
+            // Whole zonotope is under a pixel wide: a dot is all it can render as.
+            const ImVec2 p = pts_.front();
+            dl->AddRectFilled(ImVec2(p.x, p.y), ImVec2(p.x + 1.0f, p.y + 1.0f), col_zono);
+        }
     }
 
     // Control-point handles (on top).
@@ -284,11 +314,11 @@ void Editor::draw_scene(ImDrawList* dl) const
                     dl->AddRectFilled(ImVec2(p.x - 3, p.y - 3), ImVec2(p.x + 3, p.y + 3), col_handle);
                 }
         } else if (a.ps == sb2l::ParameterSet::Z) {
-            std::vector<Vec2> b = zonotope_boundary({c.cx, c.cy}, c.gens);
+            const std::vector<Vec2> b = zonotope_boundary({c.cx, c.cy}, c.gens);
             if (b.size() >= 2) {
-                std::vector<ImVec2> pts;
-                for (const Vec2& q : b) pts.push_back(canvas_.to_screen(q.x, q.y));
-                dl->AddPolyline(pts.data(), (int)pts.size(), col_handle, ImDrawFlags_Closed, 1.0f);
+                to_screen_poly(b);
+                if (pts_.size() >= 2)
+                    dl->AddPolyline(pts_.data(), (int)pts_.size(), col_handle, ImDrawFlags_Closed, 1.0f);
             }
             // One spoke per generator, grabbable at either tip.
             for (const Vec2& g : c.gens) {
