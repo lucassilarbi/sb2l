@@ -5,6 +5,8 @@
 
 namespace sb2gui {
 
+static const float kPanelWidth = 320.0f; // Controls window width
+
 static void zono_extent(const ControlPoint& cp, double& ex, double& ey)
 {
     ex = 0.0; ey = 0.0;
@@ -20,7 +22,11 @@ static float dist(ImVec2 a, ImVec2 b)
 
 void Editor::draw_controls_window()
 {
-    ImGui::Begin("Controls");
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(vp->WorkPos);
+    ImGui::SetNextWindowSize(ImVec2(kPanelWidth, vp->WorkSize.y));
+    ImGui::Begin("Controls", nullptr,
+                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
     App& a = app_;
     bool changed = false;
 
@@ -47,9 +53,11 @@ void Editor::draw_controls_window()
             ImGui::PushID(i);
             ImGui::SetNextItemWidth(80);
             changed |= ImGui::InputInt("##num", &a.wnum[i]);
+            if (a.wnum[i] < 1) a.wnum[i] = 1; // weights must stay positive
             ImGui::SameLine();
             ImGui::SetNextItemWidth(80);
             changed |= ImGui::InputInt("##den", &a.wden[i]);
+            if (a.wden[i] < 1) a.wden[i] = 1;
             ImGui::SameLine();
             ImGui::Text("w[%d]", i);
             ImGui::PopID();
@@ -265,7 +273,14 @@ void Editor::draw_scene(ImDrawList* dl) const
 
 void Editor::draw_canvas_window()
 {
-    ImGui::Begin("Canvas");
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + kPanelWidth, vp->WorkPos.y));
+    ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x - kPanelWidth, vp->WorkSize.y));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::Begin("Canvas", nullptr,
+                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
+                 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBringToFrontOnFocus);
+    ImGui::PopStyleVar();
     ImVec2 avail = ImGui::GetContentRegionAvail();
     if (avail.x < 32) avail.x = 32;
     if (avail.y < 32) avail.y = 32;

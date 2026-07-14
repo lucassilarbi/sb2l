@@ -116,12 +116,12 @@ void App::reeval()
             std::vector<std::vector<double>> P(2, std::vector<double>(nCP));
             for (int i = 0; i < nCP; ++i) { P[0][i] = cps[i].cx; P[1][i] = cps[i].cy; }
             auto pts = spline->eval_point(P);
-            for (auto& seg : pts) {
-                std::vector<Vec2> line;
-                line.reserve(seg.size());
+            // One continuous polyline: joining segments end-to-end removes the
+            // gaps between per-segment sample runs.
+            std::vector<Vec2> line;
+            for (auto& seg : pts)
                 for (auto& q : seg) line.push_back({q[0], q[1]});
-                polylines.push_back(std::move(line));
-            }
+            if (line.size() >= 2) polylines.push_back(std::move(line));
         } else if (ps == sb2l::ParameterSet::IR) {
             std::vector<ibex::IntervalVector> P(2, ibex::IntervalVector(nCP));
             for (int i = 0; i < nCP; ++i) {

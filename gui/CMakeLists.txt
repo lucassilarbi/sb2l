@@ -25,4 +25,10 @@ add_executable(sb2l_gui
     app.cpp
     editor.cpp
 )
+target_compile_options(sb2l_gui PRIVATE -frounding-math)
+# app.cpp builds/reads filib affine forms inline. GCC's optimizer (any -O >= 1,
+# even with -frounding-math) miscompiles that interval/affine arithmetic and the
+# zonotopes collapse, so build this one translation unit unoptimized. The heavy
+# work stays in the optimized sb2l/ibex libraries.
+set_source_files_properties(app.cpp PROPERTIES COMPILE_OPTIONS "-O0")
 target_link_libraries(sb2l_gui PRIVATE sb2l imgui glfw OpenGL::GL)
