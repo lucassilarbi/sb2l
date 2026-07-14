@@ -5,7 +5,25 @@
 
 namespace sb2gui {
 
-static const float kPanelWidth = 320.0f; // Controls window width
+// Every label of the controls panel. ImGui draws a label to the right of its
+// widget and clips it at the window edge, so the panel is only ever as usable as
+// the room left for the longest of them: both widths are derived from it below.
+static const char* kLabels[] = {"degree p", "num control pts", "subdivisions d",
+                                "taylor t (-1=auto)", "curve type", "form",
+                                "curve parameter", "control points", "generators / point"};
+
+// Width the labels need, and the panel width that leaves the widgets a usable
+// share next to them (font-relative, so a larger font still fits).
+static float label_width()
+{
+    float w = 0.0f;
+    for (const char* l : kLabels) w = std::max(w, ImGui::CalcTextSize(l).x);
+    return w + ImGui::GetStyle().ItemInnerSpacing.x;
+}
+static float panel_width()
+{
+    return label_width() + ImGui::GetFontSize() * 14.0f; // widget column: fits "CLAMPED_NONRATIONAL"
+}
 
 // AABB half-widths of a zonotope. For view fitting only: this loses the
 // orientation, so it must not drive editing.
@@ -65,11 +83,15 @@ void Editor::draw_controls_window()
 {
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(vp->WorkPos);
-    ImGui::SetNextWindowSize(ImVec2(kPanelWidth, vp->WorkSize.y));
+    panel_w_ = panel_width();
+    ImGui::SetNextWindowSize(ImVec2(panel_w_, vp->WorkSize.y));
     ImGui::Begin("Controls", nullptr,
                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
     App& a = app_;
-    bool changed = false;
+    bool changed = false;    // structural: needs a new symbolic basis (rebuild)
+    bool reeval = false;     // same basis, other control points (eval only)
+
+    ImGui::PushItemWidth(-label_width()); // leave every label its full width
 
     changed |= ImGui::SliderInt("degree p", &a.p, 1, 8);
     changed |= ImGui::SliderInt("num control pts", &a.nCP, a.p + 1, 24);
@@ -79,14 +101,20 @@ void Editor::draw_controls_window()
     const char* curve_types[] = {"UNIFORM_RATIONAL", "UNIFORM_NONRATIONAL",
                                  "CLAMPED_RATIONAL", "CLAMPED_NONRATIONAL"};
     const char* forms[] = {"NATURAL", "TAYLOR"};
-    const char* psets[] = {"R (points)", "IR (boxes)", "Z (zonotopes)"};
+    // The set the parameter u is taken in: it is what the basis is evaluated over.
+    const char* psets[] = {"R (real u)", "IR (interval u)", "Z (affine u)"};
+    // The set the control points are taken in, free of the one above.
+    const char* csets[] = {"R (points)", "IR (boxes)", "Z (zonotopes)"};
 
-    int ct = (int)a.ct, f = (int)a.f, ps = (int)a.ps;
+    int ct = (int)a.ct, f = (int)a.f, ps = (int)a.ps, cs = (int)a.cs;
     if (ImGui::Combo("curve type", &ct, curve_types, 4)) { a.ct = (sb2l::CurveType)ct; changed = true; }
     if (ImGui::Combo("form", &f, forms, 2)) { a.f = (sb2l::Form)f; changed = true; }
-    if (ImGui::Combo("parameter set", &ps, psets, 3)) { a.ps = (sb2l::ParameterSet)ps; changed = true; }
+    if (ImGui::Combo("curve parameter", &ps, psets, 3)) { a.ps = (sb2l::ParameterSet)ps; changed = true; }
+    // Switching the control points reuses the basis as it is: no rebuild, just a
+    // fresh eval_point / eval_box / eval_zonotope over the same B-spline.
+    if (ImGui::Combo("control points", &cs, csets, 3)) { a.cs = (sb2l::ParameterSet)cs; reeval = true; }
 
-    if (a.ps == sb2l::ParameterSet::Z)
+    if (a.cs == sb2l::ParameterSet::Z)
         changed |= ImGui::SliderInt("generators / point", &a.nGen, 1, 6);
 
     bool rational = (a.ct == sb2l::CurveType::UNIFORM_RATIONAL ||
@@ -108,10 +136,16 @@ void Editor::draw_controls_window()
         }
     }
 
+    ImGui::PopItemWidth();
+
     if (changed) a.rebuild();
+    else if (reeval) a.reeval();
 
     ImGui::Separator();
     if (ImGui::Button("Fit view")) fit_view();
+    ImGui::TextWrapped("The curve parameter and the control points are chosen apart: any of the 9 "
+                       "pairs is a B-spline (real points over an interval parameter give the tube "
+                       "of the curve, and so on).");
     ImGui::TextWrapped("Drag control handles to edit. Box mode: drag inside to move, drag a corner "
                        "to resize. Zonotope mode: drag inside to move, drag a yellow generator tip "
                        "to set its direction and length (that is how you rotate/shear the shape). "
@@ -149,14 +183,14 @@ Editor::Selection Editor::hit_test(ImVec2 m) const
     const App& a = app_;
     const float r = 7.0f;
     // Corner handles first (they sit on top and are small).
-    if (a.ps == sb2l::ParameterSet::IR) {
+    if (a.cs == sb2l::ParameterSet::IR) {
         for (int i = 0; i < (int)a.cps.size(); ++i)
             for (int sx = -1; sx <= 1; sx += 2)
                 for (int sy = -1; sy <= 1; sy += 2)
                     if (dist(m, canvas_.to_screen(a.cps[i].cx + sx * a.cps[i].hx,
                                                   a.cps[i].cy + sy * a.cps[i].hy)) < r)
                         return {Kind::BoxCorner, i, sx, sy};
-    } else if (a.ps == sb2l::ParameterSet::Z) {
+    } else if (a.cs == sb2l::ParameterSet::Z) {
         // Generator tips: each one is free in direction and length, which is
         // what lets a zonotope be reoriented rather than merely rescaled.
         for (int i = 0; i < (int)a.cps.size(); ++i) {
@@ -172,9 +206,9 @@ Editor::Selection Editor::hit_test(ImVec2 m) const
     double wx, wy; canvas_.to_world(m, wx, wy);
     for (int i = 0; i < (int)a.cps.size(); ++i) {
         const ControlPoint& c = a.cps[i];
-        if (a.ps == sb2l::ParameterSet::R) {
+        if (a.cs == sb2l::ParameterSet::R) {
             if (dist(m, canvas_.to_screen(c.cx, c.cy)) < r + 2) return {Kind::Point, i, 0, 0};
-        } else if (a.ps == sb2l::ParameterSet::IR) {
+        } else if (a.cs == sb2l::ParameterSet::IR) {
             if (wx >= c.cx - c.hx && wx <= c.cx + c.hx && wy >= c.cy - c.hy && wy <= c.cy + c.hy)
                 return {Kind::BoxBody, i, 0, 0};
         } else {
@@ -304,7 +338,7 @@ void Editor::draw_scene(ImDrawList* dl) const
     // Control-point handles (on top).
     for (const ControlPoint& c : a.cps) {
         ImVec2 ctr = canvas_.to_screen(c.cx, c.cy);
-        if (a.ps == sb2l::ParameterSet::IR) {
+        if (a.cs == sb2l::ParameterSet::IR) {
             ImVec2 tl = canvas_.to_screen(c.cx - c.hx, c.cy + c.hy);
             ImVec2 br = canvas_.to_screen(c.cx + c.hx, c.cy - c.hy);
             dl->AddRect(tl, br, col_handle);
@@ -313,7 +347,7 @@ void Editor::draw_scene(ImDrawList* dl) const
                     ImVec2 p = canvas_.to_screen(c.cx + sx * c.hx, c.cy + sy * c.hy);
                     dl->AddRectFilled(ImVec2(p.x - 3, p.y - 3), ImVec2(p.x + 3, p.y + 3), col_handle);
                 }
-        } else if (a.ps == sb2l::ParameterSet::Z) {
+        } else if (a.cs == sb2l::ParameterSet::Z) {
             const std::vector<Vec2> b = zonotope_boundary({c.cx, c.cy}, c.gens);
             if (b.size() >= 2) {
                 to_screen_poly(b);
@@ -336,8 +370,9 @@ void Editor::draw_scene(ImDrawList* dl) const
 void Editor::draw_canvas_window()
 {
     const ImGuiViewport* vp = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + kPanelWidth, vp->WorkPos.y));
-    ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x - kPanelWidth, vp->WorkSize.y));
+    // The controls window is laid out first this frame, so its width is known.
+    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + panel_w_, vp->WorkPos.y));
+    ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x - panel_w_, vp->WorkSize.y));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     ImGui::Begin("Canvas", nullptr,
                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |

@@ -140,7 +140,17 @@ A display is required (use the Docker X11 setup above).
 ./gui/sb2l_gui
 ```
 
-Controls: pick the parameter set / curve type / degree / number of control points in the
-"Controls" window; in the "Canvas" window drag a control handle to edit, drag inside a box
-or zonotope to move it and drag a corner to resize it, scroll to zoom, and drag empty space
-to pan.
+Controls: pick the curve type / degree / number of control points in the "Controls" window,
+together with the two sets the B-spline is built on, chosen independently of each other:
+
+* **curve parameter**: the set the parameter `u` is taken in (`R`, `IR` or `Z`), i.e. how the
+  basis functions themselves are evaluated. Changing it rebuilds the basis.
+* **control points**: the set the control points are taken in (points, boxes or zonotopes),
+  i.e. which of `eval_point` / `eval_box` / `eval_zonotope` is run on that basis.
+
+All 9 pairs are valid: real control points over an interval parameter give the tube of the
+curve, control boxes over a real parameter give their images with no parameter enclosure, and
+so on.
+
+In the "Canvas" window drag a control handle to edit, drag inside a box or zonotope to move it
+and drag a corner to resize it, scroll to zoom, and drag empty space to pan.

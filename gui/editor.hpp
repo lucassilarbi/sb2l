@@ -31,6 +31,7 @@ private:
     Canvas canvas_;
     Selection sel_;
     bool canvas_ready_ = false;
+    float panel_w_ = 0.0f; // controls-window width, sized to its labels each frame
 
     // Scratch buffer for the polygon being pushed to ImGui, reused across shapes
     // and across frames so that drawing N zonotopes is not N allocations a frame.
