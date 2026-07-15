@@ -550,6 +550,11 @@ Affine2Main<AF_fAFFullI>& Affine2Main<AF_fAFFullI>::sqr(const Interval itv) {
 }
 
 template<>
+const std::list<std::pair<int,double> >& Affine2Main<AF_fAFFullI>::rays() const {
+	return _elt._rays;
+}
+
+template<>
 void Affine2Main<AF_fAFFullI>::initialize(double center, std::list<std::pair<int,double> > rays, Interval garbage){
 
   _elt._center=center;

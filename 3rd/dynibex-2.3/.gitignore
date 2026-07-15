@@ -1,0 +1,6 @@
+# waf3.py runtime extraction + in-source build artifacts
+waf3-*/
+__build__/
+__pycache__/
+.waf3-*
+.lock-waf*

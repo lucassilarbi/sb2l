@@ -56,7 +56,7 @@ tested on Ubuntu22.04
 Install prerequisites:
 
 ```bash
-sudo apt-get install cmake libgmp-dev python2.7 flex bison gcc g++ make pkg-config libfuse2 libqhull-dev
+sudo apt-get install cmake libgmp-dev python3 flex bison gcc g++ make pkg-config libfuse2 libqhull-dev
 ```
 
 Update git submodules:
@@ -99,3 +99,58 @@ Used the [Vibes](https://github.com/ENSTABretagneRobotics/VIBES) library. First 
 cd VIBes-viewer
 ./VIBes-0.2.3-linux.AppImage
 ```
+
+# Interactive GUI
+
+An optional Dear ImGui editor (`gui/`) displays a B-spline of any type and lets you
+edit it directly on its control points: drag a control point, drag inside a control box
+or zonotope to move it, and drag a corner to resize it. Zonotope rendering uses a fast
+O(m log m) boundary so evaluation stays interactive.
+
+Dear ImGui is vendored under `3rd/imgui`; the GUI is off by default and enabled with
+`-DSB2L_BUILD_GUI=ON`.
+
+## Prerequisites
+
+The core prerequisites (see "Building from source") plus GLFW and OpenGL (already in the
+Docker image):
+
+```bash
+sudo apt-get install libglfw3-dev libgl1-mesa-dev
+```
+
+## Compile
+
+From the repository root, on a fresh clone:
+
+```bash
+git submodule update --init --recursive
+mkdir -p build && cd build
+cmake -DSB2L_BUILD_GUI=ON ..
+make sb2l_gui -j
+```
+
+The executable is produced at `build/gui/sb2l_gui`.
+
+## Launch
+
+A display is required (use the Docker X11 setup above).
+
+```bash
+./gui/sb2l_gui
+```
+
+Controls: pick the curve type / degree / number of control points in the "Controls" window,
+together with the two sets the B-spline is built on, chosen independently of each other:
+
+* **curve parameter**: the set the parameter `u` is taken in (`R`, `IR` or `Z`), i.e. how the
+  basis functions themselves are evaluated. Changing it rebuilds the basis.
+* **control points**: the set the control points are taken in (points, boxes or zonotopes),
+  i.e. which of `eval_point` / `eval_box` / `eval_zonotope` is run on that basis.
+
+All 9 pairs are valid: real control points over an interval parameter give the tube of the
+curve, control boxes over a real parameter give their images with no parameter enclosure, and
+so on.
+
+In the "Canvas" window drag a control handle to edit, drag inside a box or zonotope to move it
+and drag a corner to resize it, scroll to zoom, and drag empty space to pan.

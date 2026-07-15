@@ -26,9 +26,9 @@ RUN apt-get install -y \
 
 # Dependencies
 RUN apt-get install -y \
-    cmake \ 
+    cmake \
     libgmp-dev \
-    python2.7 \
+    python3 \
     flex \
     bison \
     gcc \
@@ -37,7 +37,9 @@ RUN apt-get install -y \
     libfuse2 \
     libqhull-dev \
     fuse \
-    git
+    git \
+    libglfw3-dev \
+    libgl1-mesa-dev
 
 # Build
 WORKDIR /root/sb2l

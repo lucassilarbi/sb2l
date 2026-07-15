@@ -13,6 +13,8 @@
 #include <symengine/expression.h>
 #include <ibex/ibex.h>
 #include <memory>
+#include <utility>
+#include <vector>
 
 namespace sb2l {
 
@@ -124,7 +126,22 @@ class SB2
     std::vector<std::vector<std::vector<double>>> eval_point(const std::vector<std::vector<double>> &P);
     std::vector<std::vector<ibex::IntervalVector>> eval_box(const std::vector<ibex::IntervalVector> &P);
     std::vector<std::vector<ibex::Affine2Vector>> eval_zonotope(const std::vector<ibex::Affine2Vector> &P);
-    
+    /**
+     * @brief first and last segment (both included) whose elements depend on the control point i.
+     * A segment s is only built from the control points i in [s, s+p], hence the control point i
+     * only appears in the segments s in [i-p, i]: moving it invalidates at most p+1 segments.
+     * An empty range (first > last) is returned when i is not a control point index.
+     */
+    std::pair<int, int> impacted_segments(const int i) const;
+    /**
+     * @brief re-evaluate, in place, the only segments impacted by the control point i.
+     * The elements must come from the matching eval_* call on the same B-spline, with the same
+     * control points except the i-th one. Every other segment is left untouched.
+     */
+    void update_point(const std::vector<std::vector<double>> &P, const int i, std::vector<std::vector<std::vector<double>>> &points);
+    void update_box(const std::vector<ibex::IntervalVector> &P, const int i, std::vector<std::vector<ibex::IntervalVector>> &boxes);
+    void update_zonotope(const std::vector<ibex::Affine2Vector> &P, const int i, std::vector<std::vector<ibex::Affine2Vector>> &zonotopes);
+
     private:
 
     int p_; // Curve degree
@@ -177,6 +194,17 @@ class SB2
     void compute_reBf();
     void compute_ieBf();
     void compute_aeBf();
+    /**
+     * @brief number of parameter values evaluated on the segment s (the real-based B-spline
+     * evaluates one last parameter value at the end of the last segment)
+     */
+    int du_count(const int s) const;
+    /**
+     * @brief evaluate the single segment s, used by both the whole and the incremental evaluations
+     */
+    void eval_point_segment(const std::vector<std::vector<double>> &P, const int s, std::vector<std::vector<double>> &points);
+    void eval_box_segment(const std::vector<ibex::IntervalVector> &P, const int s, std::vector<ibex::IntervalVector> &boxes);
+    void eval_zonotope_segment(const std::vector<ibex::Affine2Vector> &P, const int s, std::vector<ibex::Affine2Vector> &zonotopes);
 };
 
 }
