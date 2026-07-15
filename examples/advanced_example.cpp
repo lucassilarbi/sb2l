@@ -8,7 +8,6 @@
  */
 
 #include <sb2l.hpp>
-#include <libqhullcpp/Qhull.h>
 #include "vibes.h"
 
 std::pair<std::vector<double>, std::vector<double>> compute_zonotope2D(ibex::Affine2Vector &v) // compute the zonotope resulting from two affine forms
@@ -52,67 +51,50 @@ std::pair<std::vector<double>, std::vector<double>> compute_zonotope2D(ibex::Aff
         }
     }
     G_size = G.size();
-    // compute zontope points
-    std::vector<std::vector<double>> vertices; // vertices of the zonotopes
-    for (int b = 0; b < (1 << G_size); b++)    // 1 << G_size = 2**(G_size)
+    // Boundary of { c + sum s_i*G_i : s_i in [-1,1] } by the O(G_size log G_size)
+    // Minkowski walk: exactly 2*G_size vertices, already counter-clockwise.
+    // Replaces the 2^G_size vertex enumeration + convex hull.
+
+    // Fold every generator into the upper half-plane [0,pi); the zonotope is
+    // symmetric about c, so flipping a generator leaves the set unchanged.
+    std::vector<std::vector<double>> g;
+    for (const auto &e : G)
     {
-        vertices.push_back(std::vector<double>(m, 0));
-        for (int i = 0; i < m; i++)
-        {
-            vertices[vertices.size() - 1][i] = v[i].val(0) + [&]()
-            {
-                double r(0.0);
-                for (int j = 0; j < G_size; j++)
-                {
-                    r += ((b >> j) & 1 ? 1 : -1) * G[j][i]; // b>>j return the jth bit of b. &1 only save this bit. b>>j)&1 with b from 0 to 2**(G_size) represent the binary system evolution with each bit of b identified and usable.
-                }
-                return r;
-            }();
-        }
+        if (e[1] < 0 || (e[1] == 0 && e[0] < 0))
+            g.push_back({-e[0], -e[1]});
+        else
+            g.push_back({e[0], e[1]});
     }
-    // report
-    // std::cout << "--------------------------------------------------" << std::endl;
-    // std::cout << "maximum affine noises per affine form: " << ibex::AF_fAFFullI::getAffineNoiseNumber() << std::endl;
-    // std::cout << "affine tolerance of the compaction: " << ibex::AF_fAFFullI::getAffineTolerance() << std::endl;
-    // std::cout << "dim: " << m << std::endl;
-    // std::cout << "number of generator vector: " << G_size << std::endl;
-    // std::cout << "number of verticies: " << vertices.size() << std::endl;
-    // flatten points (from here on, the code only works in 2D)
-    std::vector<double> pts;
-    for (const auto &p : vertices)
-    {
-        pts.push_back(p[0]);
-        pts.push_back(p[1]);
-    }
-    // convex hull
-    orgQhull::Qhull qh;
-    std::vector<std::pair<double, double>> zonotope({});
-    if (vertices.size() > 2)
-    {
-        qh.runQhull("", 2, vertices.size(), pts.data(), "Qt");
-        // extract hull points
-        for (const orgQhull::QhullVertex &v : qh.vertexList())
-        {
-            const double *p = v.point().coordinates();
-            zonotope.emplace_back(p[0], p[1]);
-        }
-        // sort around center c
-        std::sort(zonotope.begin(), zonotope.end(), [&](const auto &p1, const auto &p2)
-                  { return std::atan2(p1.second - c[1], p1.first - c[0]) < std::atan2(p2.second - c[1], p2.first - c[0]); }); // return true if p1 is before p2 around the center (before in a counter clockwise sens)
-    }
-    else
-    {
-        for (const auto &p : vertices)
-        {
-            zonotope.emplace_back(p[0], p[1]);
-        }
-    }
-    // to pair
+    // Sort by angle: within [0,pi) a positive cross product means smaller angle.
+    std::sort(g.begin(), g.end(), [](const std::vector<double> &a, const std::vector<double> &b)
+              { return a[0] * b[1] - a[1] * b[0] > 0; });
+
+    // Start at the bottom vertex c - sum(g), then trace both point-symmetric halves.
     std::vector<double> X({}), Y({});
-    for (const auto &p : zonotope)
+    double px(c[0]), py(c[1]);
+    for (const auto &e : g)
     {
-        X.push_back(p.first);
-        Y.push_back(p.second);
+        px -= e[0];
+        py -= e[1];
+    }
+    for (const auto &e : g) // upper chain
+    {
+        X.push_back(px);
+        Y.push_back(py);
+        px += 2 * e[0];
+        py += 2 * e[1];
+    }
+    for (const auto &e : g) // lower chain (point-symmetric)
+    {
+        X.push_back(px);
+        Y.push_back(py);
+        px -= 2 * e[0];
+        py -= 2 * e[1];
+    }
+    if (g.empty()) // degenerate: single point
+    {
+        X.push_back(c[0]);
+        Y.push_back(c[1]);
     }
     return std::pair<std::vector<double>, std::vector<double>>(X, Y);
 }
