@@ -3,7 +3,6 @@
 
 import os, shutil, re
 
-from distutils.version import LooseVersion
 from waflib import Logs, Scripting
 
 # the following two variables are used by the target "waf dist"
@@ -114,29 +113,6 @@ def configure (conf):
 	# build as shared lib
 	if conf.options.ENABLE_SHARED or conf.options.WITH_JNI:
 		env.ENABLE_SHARED = True
-
-	def find_lib (prefix):
-
-		parent_dir = os.path.abspath ("..")
-
-		v = LooseVersion ("0")
-		for path in os.listdir (parent_dir):
-			if path.startswith (prefix) and os.path.isdir (os.path.join (parent_dir, path)):
-				new_v = LooseVersion (path)
-				if new_v > v:
-					v = new_v
-		
-		if v.vstring == "0":
-			return None
-		else:
-			lib = os.path.join (parent_dir, v.vstring)
-			return lib
-
-	def candidate_lib_path (opt_name, prefix):
-
-		path = getattr (conf.options, opt_name)
-
-		return os.path.abspath (os.path.expanduser (path)) if path else find_lib (prefix)
 
 	##################################################################################################
 	# AMPL is disable on Window
