@@ -24,6 +24,10 @@ public:
     void draw_controls_window();
     void draw_canvas_window();
 
+    // Drive the 3D camera programmatically (documentation captures).
+    void orbit_view(float dx, float dy) { cam_.orbit(ImVec2(dx, dy)); }
+    void set_view(double yaw, double pitch) { cam_.yaw = yaw; cam_.pitch = pitch; }
+
 private:
     enum class Kind { None, Point, BoxBody, BoxCorner, ZonoBody, ZonoGen };
     struct Selection {

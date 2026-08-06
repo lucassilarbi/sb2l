@@ -135,6 +135,10 @@ void App::set_dim(int nd)
     if (nd != 2 && nd != 3) return;
     if (nd == dim) return;
     dim = nd;
+    // A zonotope with m generators spans at most m dimensions, so the usual 2D
+    // default of two generators would make every control set a flat
+    // parallelogram in space. Three is the least that gives a solid.
+    if (dim == 3 && nGen < 3) nGen = 3;
     // The symbolic basis is dimension-agnostic, so only the control points and
     // the evaluation change. Reseed the scene so 3D actually shows 3D (the 2D
     // sine wave lifted verbatim would still lie in a plane).

@@ -800,6 +800,15 @@ void Editor::draw_canvas_window()
         handle_input();
         draw_scene(dl);
     }
+    // Optional caption over the canvas (set by the documentation captures).
+    if (!app_.banner.empty()) {
+        const char* s = app_.banner.c_str();
+        const ImVec2 ts = ImGui::CalcTextSize(s);
+        const ImVec2 at(p0.x + (avail.x - ts.x) * 0.5f, p0.y + 14.0f);
+        dl->AddRectFilled(ImVec2(at.x - 10, at.y - 5), ImVec2(at.x + ts.x + 10, at.y + ts.y + 5),
+                          IM_COL32(18, 18, 20, 210), 4.0f);
+        dl->AddText(at, IM_COL32(235, 235, 235, 255), s);
+    }
     dl->PopClipRect();
     ImGui::End();
 }

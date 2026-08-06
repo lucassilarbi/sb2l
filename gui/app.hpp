@@ -106,6 +106,7 @@ public:
     std::vector<Zono3> zonos3;                 // effective Z, dim 3: center + generators
 
     std::string status;                        // last rebuild/eval message
+    std::string banner;                        // caption drawn over the canvas, if set
     bool dirty_structural = true;
     bool want_fit = false;                     // consumed by the editor: refit view
 
