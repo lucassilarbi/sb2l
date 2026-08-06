@@ -81,3 +81,11 @@ option(SB2L_BUILD_GUI "Build the ImGui interactive editor" OFF)
 if(SB2L_BUILD_GUI)
     add_subdirectory(gui)
 endif()
+
+# Numerical checks of the 3D zonotope geometry used by the editor. The tested
+# headers are pure double (no ibex, no OpenGL), so this target needs nothing
+# but a compiler and builds in a second.
+option(SB2L_BUILD_TESTS "Build the geometry checks" OFF)
+if(SB2L_BUILD_TESTS)
+    add_executable(zonotope3d_checks tests/zonotope3d_checks.cpp)
+endif()

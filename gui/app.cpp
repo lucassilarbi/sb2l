@@ -7,14 +7,28 @@
 
 namespace sb2gui {
 
-// Default generators for a fresh zonotope control point: n directions evenly
-// spread over a half-turn (n = 2 gives the usual small square).
-static std::vector<Vec2> default_gens(int n)
+static const double kPi = 3.14159265358979323846;
+
+// Default generators for a fresh zonotope control point. 2D: n directions
+// evenly spread over a half-turn (n = 2 gives the usual small square).
+// 3D: n directions on a Fibonacci hemisphere (a zonotope is symmetric about
+// its center, so half the sphere spans every orientation).
+static std::vector<Vec3> default_gens(int n, int dim)
 {
-    std::vector<Vec2> g;
-    for (int k = 0; k < n; ++k) {
-        double th = 3.14159265358979 * k / (n > 0 ? n : 1);
-        g.push_back({0.12 * std::cos(th), 0.12 * std::sin(th)});
+    std::vector<Vec3> g;
+    if (n < 1) n = 1;
+    if (dim == 3) {
+        const double ga = kPi * (3.0 - std::sqrt(5.0)); // golden angle
+        for (int k = 0; k < n; ++k) {
+            const double zk = (k + 0.5) / n;
+            const double r = std::sqrt(1.0 - zk * zk);
+            g.push_back({0.12 * r * std::cos(ga * k), 0.12 * r * std::sin(ga * k), 0.12 * zk});
+        }
+    } else {
+        for (int k = 0; k < n; ++k) {
+            const double th = kPi * k / n;
+            g.push_back({0.12 * std::cos(th), 0.12 * std::sin(th), 0.0});
+        }
     }
     return g;
 }
@@ -31,10 +45,20 @@ void App::seed_default_scene()
     for (int i = 0; i < nCP; ++i) {
         double u = (nCP > 1) ? (double)i / (nCP - 1) : 0.0;
         ControlPoint cp;
-        cp.cx = 0.3 + 2.6 * u;
-        cp.cy = 1.5 + 1.0 * std::sin(u * 3.14159265 * 1.5);
-        cp.hx = cp.hy = 0.1;
-        cp.gens = default_gens(nGen);
+        if (dim == 3) {
+            // A genuinely 3D scene: a helix, so the curve does not sit in any
+            // coordinate plane and the orbit camera has something to show.
+            const double th = 2.0 * kPi * u;
+            cp.cx = 1.5 * std::cos(th);
+            cp.cy = 1.5 * std::sin(th);
+            cp.cz = 2.4 * u - 1.2;
+        } else {
+            cp.cx = 0.3 + 2.6 * u;
+            cp.cy = 1.5 + 1.0 * std::sin(u * kPi * 1.5);
+            cp.cz = 0.0;
+        }
+        cp.hx = cp.hy = cp.hz = 0.1;
+        cp.gens = default_gens(nGen, dim);
         cps.push_back(cp);
     }
 }
@@ -47,8 +71,9 @@ void App::resize_control_points()
             const ControlPoint& prev = cps.empty() ? ControlPoint{} : cps.back();
             cp.cx = prev.cx + 0.3;
             cp.cy = prev.cy;
-            cp.hx = cp.hy = 0.1;
-            cp.gens = default_gens(nGen);
+            cp.cz = prev.cz;
+            cp.hx = cp.hy = cp.hz = 0.1;
+            cp.gens = default_gens(nGen, dim);
             cps.push_back(cp);
         }
     } else if ((int)cps.size() > nCP) {
@@ -57,7 +82,7 @@ void App::resize_control_points()
     // Keep every point at nGen generators, preserving the ones already edited.
     for (ControlPoint& cp : cps) {
         if ((int)cp.gens.size() == nGen) continue;
-        std::vector<Vec2> fresh = default_gens(nGen);
+        std::vector<Vec3> fresh = default_gens(nGen, dim);
         for (int k = 0; k < nGen && k < (int)cp.gens.size(); ++k) fresh[k] = cp.gens[k];
         cp.gens = std::move(fresh);
     }
@@ -71,6 +96,7 @@ void App::rebuild()
     if (nCP < p + 1) nCP = p + 1;
     if (d < 1) d = 1;
     if (nGen < 1) nGen = 1;
+    if (dim != 3) dim = 2;
     resize_control_points();
 
     try {
@@ -99,8 +125,23 @@ void App::rebuild()
         polylines.clear();
         boxes.clear();
         zonos.clear();
+        zonos3.clear();
         status = std::string("rebuild failed: ") + e.what();
     }
+}
+
+void App::set_dim(int nd)
+{
+    if (nd != 2 && nd != 3) return;
+    if (nd == dim) return;
+    dim = nd;
+    // The symbolic basis is dimension-agnostic, so only the control points and
+    // the evaluation change. Reseed the scene so 3D actually shows 3D (the 2D
+    // sine wave lifted verbatim would still lie in a plane).
+    seed_default_scene();
+    resize_control_points();
+    reeval();
+    want_fit = true;
 }
 
 // Boundary polygon of a 2D affine vector (center + generators + error box).
@@ -137,54 +178,98 @@ static std::vector<Vec2> zono_from_affine(const ibex::Affine2Vector& v)
     return zonotope_boundary(c, gens);
 }
 
+// 3D center + generators of a 3D affine vector: the same index-sorted merge
+// as zono_from_affine, over the three coordinate rows. The boundary itself is
+// not built here -- the camera projects these generators and the 2D walk runs
+// on the projection, so the exact silhouette costs O(m log m) per frame and
+// the O(m^2) facet mesh is never needed for result elements.
+static Zono3 zono3_from_affine(const ibex::Affine2Vector& v)
+{
+    Zono3 z;
+    z.c = {v[0].val(0), v[1].val(0), v[2].val(0)};
+
+    typedef std::list<std::pair<int, double> >::const_iterator It;
+    const std::list<std::pair<int, double> >* rays[3] = {&v[0].rays(), &v[1].rays(), &v[2].rays()};
+    It it[3];
+    for (int r = 0; r < 3; ++r) it[r] = rays[r]->begin();
+    z.gens.reserve(rays[0]->size() + rays[1]->size() + rays[2]->size() + 3);
+
+    for (;;) {
+        int idx = -1; // smallest live noise-symbol index across the three rows
+        for (int r = 0; r < 3; ++r)
+            if (it[r] != rays[r]->end() && (idx < 0 || it[r]->first < idx)) idx = it[r]->first;
+        if (idx < 0) break;
+        Vec3 g{0.0, 0.0, 0.0};
+        double* comp[3] = {&g.x, &g.y, &g.z};
+        for (int r = 0; r < 3; ++r)
+            if (it[r] != rays[r]->end() && it[r]->first == idx) *comp[r] = (it[r]++)->second;
+        z.gens.push_back(g);
+    }
+    // Accumulated error terms as axis-aligned generators (keeps over-approx).
+    if (v[0].err() > 0.0) z.gens.push_back({v[0].err(), 0.0, 0.0});
+    if (v[1].err() > 0.0) z.gens.push_back({0.0, v[1].err(), 0.0});
+    if (v[2].err() > 0.0) z.gens.push_back({0.0, 0.0, v[2].err()});
+    return z;
+}
+
 std::vector<std::vector<double>> App::control_points_R() const
 {
-    std::vector<std::vector<double>> P(2, std::vector<double>(nCP));
-    for (int i = 0; i < nCP; ++i) { P[0][i] = cps[i].cx; P[1][i] = cps[i].cy; }
+    std::vector<std::vector<double>> P(dim, std::vector<double>(nCP));
+    for (int i = 0; i < nCP; ++i) {
+        P[0][i] = cps[i].cx;
+        P[1][i] = cps[i].cy;
+        if (dim == 3) P[2][i] = cps[i].cz;
+    }
     return P;
 }
 
 std::vector<ibex::IntervalVector> App::control_points_IR() const
 {
-    std::vector<ibex::IntervalVector> P(2, ibex::IntervalVector(nCP));
+    std::vector<ibex::IntervalVector> P(dim, ibex::IntervalVector(nCP));
     for (int i = 0; i < nCP; ++i) {
         P[0][i] = ibex::Interval(cps[i].cx - cps[i].hx, cps[i].cx + cps[i].hx);
         P[1][i] = ibex::Interval(cps[i].cy - cps[i].hy, cps[i].cy + cps[i].hy);
+        if (dim == 3) P[2][i] = ibex::Interval(cps[i].cz - cps[i].hz, cps[i].cz + cps[i].hz);
     }
     return P;
 }
 
 std::vector<ibex::Affine2Vector> App::control_points_Z() const
 {
-    std::vector<ibex::Affine2Vector> P(2, ibex::Affine2Vector(nCP));
+    std::vector<ibex::Affine2Vector> P(dim, ibex::Affine2Vector(nCP));
     for (int i = 0; i < nCP; ++i) {
-        ibex::Affine2 ax(cps[i].cx), ay(cps[i].cy);
-        for (const Vec2& g : cps[i].gens) {
+        ibex::Affine2 ax(cps[i].cx), ay(cps[i].cy), az(cps[i].cz);
+        for (const Vec3& g : cps[i].gens) {
             ibex::Affine2 e(ibex::Interval(-1, 1)); // fresh independent noise
             ax += g.x * e;
             ay += g.y * e;
+            if (dim == 3) az += g.z * e;
         }
         P[0][i] = ax;
         P[1][i] = ay;
+        if (dim == 3) P[2][i] = az;
     }
     return P;
 }
 
 void App::alloc_geometry()
 {
-    const int nS = spline->get_nS(), d = spline->get_d();
+    const int nS = spline->get_nS(), dd = spline->get_d();
     // Only a real parameter evaluates the closing element of the last segment
     // (SB2::du_count), whatever set the control points live in.
-    const int n = nS * d + (ps == sb2l::ParameterSet::R ? 1 : 0);
+    const int n = nS * dd + (ps == sb2l::ParameterSet::R ? 1 : 0);
     polylines.clear();
     boxes.clear();
     zonos.clear();
+    zonos3.clear();
     if (cs == sb2l::ParameterSet::R) {
         // One continuous polyline: joining the segments end-to-end removes the
         // gaps between per-segment sample runs.
-        polylines.assign(1, std::vector<Vec2>(n));
+        polylines.assign(1, std::vector<Vec3>(n));
     } else if (cs == sb2l::ParameterSet::IR) {
         boxes.assign(n, Box{});
+    } else if (dim == 3) {
+        zonos3.assign(n, Zono3{});
     } else {
         zonos.assign(n, std::vector<Vec2>());
     }
@@ -192,19 +277,20 @@ void App::alloc_geometry()
 
 void App::refresh_geometry(int s0, int s1)
 {
-    const int nS = spline->get_nS(), d = spline->get_d();
+    const int nS = spline->get_nS(), dd = spline->get_d();
     if (s0 < 0) s0 = 0;
     if (s1 > nS - 1) s1 = nS - 1;
     for (int s = s0; s <= s1; ++s) {
         if (cs == sb2l::ParameterSet::R) {
             const std::vector<std::vector<double>>& seg = epoints[s];
             for (size_t du = 0; du < seg.size(); ++du)
-                polylines[0][s * d + du] = {seg[du][0], seg[du][1]};
+                polylines[0][s * dd + du] = {seg[du][0], seg[du][1], dim == 3 ? seg[du][2] : 0.0};
         } else if (cs == sb2l::ParameterSet::IR) {
             const std::vector<ibex::IntervalVector>& seg = eboxes[s];
             for (size_t du = 0; du < seg.size(); ++du) {
                 const ibex::IntervalVector& b = seg[du];
-                boxes[s * d + du] = {b[0].lb(), b[1].lb(), b[0].ub(), b[1].ub()};
+                boxes[s * dd + du] = {b[0].lb(), b[1].lb(), dim == 3 ? b[2].lb() : 0.0,
+                                      b[0].ub(), b[1].ub(), dim == 3 ? b[2].ub() : 0.0};
             }
         } else {
             // Compact in place: eval/update_zonotope always rewrites these forms
@@ -213,7 +299,10 @@ void App::refresh_geometry(int s0, int s1)
             std::vector<ibex::Affine2Vector>& seg = ezonos[s];
             for (size_t du = 0; du < seg.size(); ++du) {
                 seg[du].compact();
-                zonos[s * d + du] = zono_from_affine(seg[du]);
+                if (dim == 3)
+                    zonos3[s * dd + du] = zono3_from_affine(seg[du]);
+                else
+                    zonos[s * dd + du] = zono_from_affine(seg[du]);
             }
         }
     }
@@ -242,6 +331,7 @@ void App::reeval()
         polylines.clear();
         boxes.clear();
         zonos.clear();
+        zonos3.clear();
         status = std::string("eval failed: ") + e.what();
     }
 }
@@ -254,6 +344,16 @@ void App::update_control_point(int i)
                         : (cs == sb2l::ParameterSet::IR) ? eboxes.size()
                                                          : ezonos.size();
     if ((int)cached != nS) { // nothing to patch: mode just changed, or the last eval failed
+        reeval();
+        return;
+    }
+    // The raw eval must carry the current dimension too: the containers keep
+    // their per-segment layout across a dim switch, but not their row count.
+    const int cached_dim =
+        (cs == sb2l::ParameterSet::R)  ? (epoints[0].empty() ? 0 : (int)epoints[0][0].size())
+      : (cs == sb2l::ParameterSet::IR) ? (eboxes[0].empty() ? 0 : eboxes[0][0].size())
+                                       : (ezonos[0].empty() ? 0 : ezonos[0][0].size());
+    if (cached_dim != dim) {
         reeval();
         return;
     }
