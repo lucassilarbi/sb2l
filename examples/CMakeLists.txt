@@ -12,7 +12,6 @@ foreach(target basic_example advanced_example)
     target_link_libraries(${target}
         PRIVATE
             sb2l
-            qhullcpp
             symengine
             gmp
     )

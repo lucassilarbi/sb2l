@@ -75,53 +75,86 @@ class SB2
 
     /**
      * @brief Constructor
+     * @param p degree of the curve, p >= 1 (p >= 0 is accepted but gives a constant basis)
+     * @param nCP number of control points, nCP > p
+     * @param d number of parameter subdivisions per segment, d >= 1
+     * @param t Taylor order, only used when f is Form::TAYLOR. -1 selects it
+     *          automatically (p-1, capped at 11 by the factorial). Any other
+     *          negative value is rejected; values above 11 are capped.
+     * Every argument is validated: an out-of-range one raises std::runtime_error
+     * rather than leaving the object in an undefined state.
      */
     SB2(const int p = 3,
          const int nCP = 5,
          const CurveType ct = CurveType::UNIFORM_NONRATIONAL,
          const Form f = Form::TAYLOR,
          const ParameterSet ps = ParameterSet::IR,
-         const int d = 10, 
+         const int d = 10,
          const int t=-1,
          const std::vector<SymEngine::Expression> W=std::vector<SymEngine::Expression>({})
         );
     /**
+     * @brief number of noise symbols an affine form keeps before the smallest
+     * ones are merged into its error term. This is process-wide state of the
+     * affine arithmetic, not a property of one B-spline; the default of the
+     * underlying library is 10, which silently reduces the order of any
+     * zonotope built from more than 10 generators. Raise it before building
+     * control zonotopes if their exact shape matters.
+     */
+    static void set_affine_noise_number(const unsigned int n);
+    static unsigned int get_affine_noise_number();
+    /**
      * @brief get p_
      */
-    int get_p();
+    int get_p() const;
     /**
      * @brief get n_
      */
-    int get_n();
+    int get_n() const;
     /**
      * @brief get nS_
      */
-    int get_nS();
+    int get_nS() const;
     /**
      * @brief get d_
      */
-    int get_d();
+    int get_d() const;
     /**
-     * @brief get basis
+     * @brief get basis. The basis is returned in the arithmetic asked for,
+     * converted from the one it was built in when they differ (an interval
+     * basis is the hull of an affine one, a real basis its midpoint); the
+     * conversions that lose the enclosure, from a poorer to a richer
+     * arithmetic, raise std::runtime_error. These getters do not modify the
+     * B-spline.
      */
-    std::vector<std::vector<std::vector<double>>> get_reBf();
-    std::vector<std::vector<std::vector<ibex::Interval>>> get_ieBf();
-    std::vector<std::vector<std::vector<ibex::Affine2>>> get_aeBf();
+    std::vector<std::vector<std::vector<double>>> get_reBf() const;
+    std::vector<std::vector<std::vector<ibex::Interval>>> get_ieBf() const;
+    std::vector<std::vector<std::vector<ibex::Affine2>>> get_aeBf() const;
     /**
      * @brief evaluate the order-th derivative of the basis functions, using the same form as the basis
      */
-    std::vector<std::vector<std::vector<double>>> get_reBf_diff(const int order);
-    std::vector<std::vector<std::vector<ibex::Interval>>> get_ieBf_diff(const int order);
-    std::vector<std::vector<std::vector<ibex::Affine2>>> get_aeBf_diff(const int order);
+    std::vector<std::vector<std::vector<double>>> get_reBf_diff(const int order) const;
+    std::vector<std::vector<std::vector<ibex::Interval>>> get_ieBf_diff(const int order) const;
+    std::vector<std::vector<std::vector<ibex::Affine2>>> get_aeBf_diff(const int order) const;
     /**
-     * @brief get idu_
+     * @brief get the subdivisions of the parameter, in the arithmetic asked
+     * for, under the same conversion rules as the basis getters above.
      */
-    std::vector<std::vector<ibex::Interval>> get_rdu();
-    std::vector<std::vector<ibex::Interval>> get_idu();
-    std::vector<std::vector<ibex::Affine2>> get_adu();
+    std::vector<std::vector<ibex::Interval>> get_rdu() const;
+    std::vector<std::vector<ibex::Interval>> get_idu() const;
+    std::vector<std::vector<ibex::Affine2>> get_adu() const;
     /**
      * @brief evaluate the B-spline. Takes a list of control points as input and return the list corresponding elements.
-     * The resulted elements are arranged by segment
+     * The resulted elements are arranged by segment: out[s][du] is the element
+     * of segment s on subdivision du. P holds one container per coordinate,
+     * all of the same size, at least n+1 entries each.
+     *
+     * eval_box and eval_zonotope enclose the curve. eval_point does not: it
+     * returns one point per subdivision, obtained from the midpoint of the
+     * basis, so it only coincides with the curve when the parameter set is
+     * ParameterSet::R. Over an interval or affine parameter it is a
+     * representative of the element, with no enclosure property; use
+     * eval_box or eval_zonotope when the guarantee is needed.
      */
     std::vector<std::vector<std::vector<double>>> eval_point(const std::vector<std::vector<double>> &P);
     std::vector<std::vector<ibex::IntervalVector>> eval_box(const std::vector<ibex::IntervalVector> &P);
@@ -190,7 +223,7 @@ class SB2
     /**
      * @brief compute ieBf_
      */
-    int factorial(int n); // numerically limited to n <= 12
+    static int factorial(int n); // numerically limited to n <= 12
     void compute_reBf();
     void compute_ieBf();
     void compute_aeBf();

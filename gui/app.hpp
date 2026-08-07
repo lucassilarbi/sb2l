@@ -121,7 +121,11 @@ public:
     void update_control_point(int i);
     // Switch between the 2D and the 3D curve: the basis is untouched, so this
     // only re-runs the evaluation over a different number of coordinate rows.
+    // The control points are kept.
     void set_dim(int nd);
+    // Change the number of generators of the control zonotopes. The basis does
+    // not depend on it, so this costs one evaluation, never a rebuild.
+    void set_generator_count(int n);
 
     int nSegments() const { return spline ? spline->get_nS() : 0; }
 

@@ -9,17 +9,21 @@ find_dependency(GMP REQUIRED)
 
 include("${CMAKE_CURRENT_LIST_DIR}/sb2lTargets.cmake")
 
-add_library(ibex STATIC IMPORTED)
+# Guarded, and GLOBAL: this file may be read again by a second find_package in
+# another directory of the consuming project, and the targets have to be
+# visible from every one of them.
+if(NOT TARGET filib)
+    add_library(filib STATIC IMPORTED GLOBAL)
+    set_target_properties(filib PROPERTIES
+        IMPORTED_LOCATION "${CMAKE_CURRENT_LIST_DIR}/../../../lib/libprim.a"
+    )
+endif()
 
-set_target_properties(ibex PROPERTIES
-    IMPORTED_LOCATION "${CMAKE_CURRENT_LIST_DIR}/../../../lib/libibex.a"
-    INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/../../../include"
-)
-
-add_library(filib STATIC IMPORTED)
-
-set_target_properties(filib PROPERTIES
-    IMPORTED_LOCATION "${CMAKE_CURRENT_LIST_DIR}/../../../lib/libprim.a"
-)
-
-target_link_libraries(ibex INTERFACE filib)
+if(NOT TARGET ibex)
+    add_library(ibex STATIC IMPORTED GLOBAL)
+    set_target_properties(ibex PROPERTIES
+        IMPORTED_LOCATION "${CMAKE_CURRENT_LIST_DIR}/../../../lib/libibex.a"
+        INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/../../../include"
+    )
+    target_link_libraries(ibex INTERFACE filib)
+endif()

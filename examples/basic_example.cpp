@@ -8,7 +8,6 @@
  */
 
 #include <sb2l.hpp>
-#include <libqhullcpp/Qhull.h>
 #include "vibes.h"
 
 int main()

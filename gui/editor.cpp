@@ -199,8 +199,11 @@ void Editor::draw_controls_window()
     int dsel = (a.dim == 3) ? 1 : 0;
     if (ImGui::Combo("dimension", &dsel, dims, 2)) a.set_dim(dsel == 1 ? 3 : 2);
 
-    if (a.cs == sb2l::ParameterSet::Z)
-        changed |= ImGui::SliderInt("generators / point", &a.nGen, 1, 6);
+    if (a.cs == sb2l::ParameterSet::Z) {
+        int ng = a.nGen;
+        // The basis does not depend on the generators: an evaluation, not a rebuild.
+        if (ImGui::SliderInt("generators / point", &ng, 1, 6)) a.set_generator_count(ng);
+    }
 
     bool rational = (a.ct == sb2l::CurveType::UNIFORM_RATIONAL ||
                      a.ct == sb2l::CurveType::CLAMPED_RATIONAL);

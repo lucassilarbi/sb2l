@@ -3,11 +3,28 @@ project(sb2l VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 14)
 
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -march=native")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
+
+# Flags every translation unit doing interval or affine arithmetic must carry.
+# -frounding-math stops the compiler from folding constants under the default
+# rounding mode, which is not the one this arithmetic sets at run time.
+# -ffp-contract=off stops it from fusing a*b+c into a single rounded operation:
+# the intermediate product would escape the directed rounding the enclosure
+# relies on. Both are correctness requirements, not optimisation choices, so
+# the code is compiled optimised like the rest of the library.
+set(SB2L_INTERVAL_FLAGS -frounding-math -ffp-contract=off)
+
+# -march=native is off by default: it makes the binary unusable on any older
+# machine, and its FMA instructions are exactly what -ffp-contract guards.
+option(SB2L_NATIVE_ARCH "Tune the build for the machine that compiles it" OFF)
 
 add_library(sb2l
     src/sb2l.cpp
 )
+target_compile_options(sb2l PUBLIC ${SB2L_INTERVAL_FLAGS})
+if(SB2L_NATIVE_ARCH)
+    target_compile_options(sb2l PRIVATE -march=native)
+endif()
 
 # GMP (for symengine)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/3rd/symengine-0.14.0/cmake")

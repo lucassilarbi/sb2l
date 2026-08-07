@@ -2,10 +2,10 @@ FROM ubuntu:22.04
 
 COPY . /root/sb2l
 
-RUN apt-get update
-
-# Graphics
-RUN apt-get install -y \
+# Update and install in one layer, so the package index can never be a stale
+# one cached from an earlier build.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    `# graphics, for the VIBes viewer and the editor` \
     libx11-xcb1 \
     libxcb1 \
     libxcb-xinerama0 \
@@ -22,10 +22,8 @@ RUN apt-get install -y \
     fontconfig \
     libfreetype6 \
     libfontconfig1 \
-    ca-certificates
-
-# Dependencies
-RUN apt-get install -y \
+    ca-certificates \
+    `# build` \
     cmake \
     libgmp-dev \
     python3 \
@@ -35,23 +33,26 @@ RUN apt-get install -y \
     g++ \
     make \
     libfuse2 \
-    libqhull-dev \
     fuse \
     git \
     libglfw3-dev \
-    libgl1-mesa-dev
+    libgl1-mesa-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Build
+# Build the library and the editor, optimised. The build tree is kept: the
+# editor lives in it, and rebuilding from the image would mean configuring
+# everything again.
 WORKDIR /root/sb2l
 RUN git submodule update --init --recursive
 WORKDIR /root/sb2l/build
-RUN cmake ..
+RUN cmake -DCMAKE_BUILD_TYPE=Release -DSB2L_BUILD_GUI=ON ..
 RUN make -j
 RUN make install
-WORKDIR /root/sb2l/
-RUN rm -rf build
-WORKDIR /root/sb2l/examples/build
-RUN cmake ..
-RUN make
 
+# Examples, ready to run (the viewer must be started first, see the README).
+WORKDIR /root/sb2l/examples/build
+RUN cmake -DCMAKE_BUILD_TYPE=Release ..
+RUN make -j
+
+WORKDIR /root/sb2l
 CMD ["bash"]

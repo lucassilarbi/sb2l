@@ -111,7 +111,7 @@ void App::rebuild()
         }
         // One independent noise symbol per generator of every control point,
         // plus room for the ones the evaluation introduces itself.
-        ibex::AF_fAFFullI::setAffineNoiseNumber(nCP * nGen + 16);
+        sb2l::SB2::set_affine_noise_number(nCP * nGen + 16);
 
         spline.reset(new sb2l::SB2(p, nCP, ct, f, ps, d, t, W));
         dirty_structural = false;
@@ -139,13 +139,37 @@ void App::set_dim(int nd)
     // default of two generators would make every control set a flat
     // parallelogram in space. Three is the least that gives a solid.
     if (dim == 3 && nGen < 3) nGen = 3;
-    // The symbolic basis is dimension-agnostic, so only the control points and
-    // the evaluation change. Reseed the scene so 3D actually shows 3D (the 2D
-    // sine wave lifted verbatim would still lie in a plane).
-    seed_default_scene();
+    // The scene is kept: the control points already hold their three
+    // coordinates, and the symbolic basis does not know the dimension. Only a
+    // scene which is still entirely flat is given a relief, so that the 3D
+    // canvas shows a curve outside the z = 0 plane; an edited one is left
+    // exactly as it is.
+    if (dim == 3) {
+        bool flat = true;
+        for (const ControlPoint& c : cps)
+            if (c.cz != 0.0) flat = false;
+        if (flat)
+            for (size_t i = 0; i < cps.size(); ++i) {
+                const double u = (cps.size() > 1) ? (double)i / (cps.size() - 1) : 0.0;
+                cps[i].cz = 1.2 * std::sin(2.0 * kPi * u);
+            }
+    }
     resize_control_points();
     reeval();
     want_fit = true;
+}
+
+void App::set_generator_count(int n)
+{
+    if (n < 1) n = 1;
+    if (n == nGen) return;
+    nGen = n;
+    // The number of generators changes the control sets, never the basis, so
+    // the symbolic rebuild is not needed: only the noise budget and one fresh
+    // evaluation.
+    resize_control_points();
+    sb2l::SB2::set_affine_noise_number(nCP * nGen + 16);
+    reeval();
 }
 
 // Boundary polygon of a 2D affine vector (center + generators + error box).
