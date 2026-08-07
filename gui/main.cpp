@@ -4,7 +4,8 @@
  * Usage:
  *   sb2l_gui                          interactive editor
  *   sb2l_gui --shot <file.ppm> [opt]  render one screenshot of that configuration, then exit
- *   sb2l_gui --tour <dir> [opt]       render the scripted feature tour as dir/f%04d.ppm
+ *   sb2l_gui --tour <dir> [opt]       render the scripted feature tour as dir/f%04d.ppm,
+ *                                     kTourFps images per second of it
  *
  * Options (all optional, applied before the first frame):
  *   --dim 2|3      --ps R|IR|Z    --cs R|IR|Z    --ct UR|UN|CR|CN
@@ -67,14 +68,26 @@ static sb2l::CurveType parse_ct(const char* s)
 
 // ---------------------------------------------------------------- the tour ---
 
+// Images captured per second of the tour. The animation the images are
+// assembled into keeps its delay in hundredths of a second, so a rate has to
+// divide 100 to be played at the speed it was captured at, and a delay of one
+// hundredth is put back to a tenth by the readers: 50 is the highest rate that
+// is honoured. Every duration below is in seconds and every animation moves by
+// so much per second, so this number sets the smoothness alone: the tour lasts
+// as long and moves as fast whatever it is.
+static const int kTourFps = 50;
+static const double kPi = 3.14159265358979;
+
 // One scripted stage: a caption, a state applied once on entry, and an
 // optional per-frame animation (the local frame index is passed in).
 struct Stage {
-    int frames;
+    double seconds;
     const char* caption;
     void (*enter)(sb2gui::App&);
     void (*step)(sb2gui::App&, sb2gui::Editor&, int);
 };
+
+static int stage_length(const Stage& s) { return (int)(s.seconds * kTourFps + 0.5); }
 
 // The whole tour runs on the tightest evaluation the library offers: an
 // affine parameter, so the many occurrences of u inside a basis function stay
@@ -94,14 +107,18 @@ static void st_boxes(sb2gui::App& a)
 }
 
 // Walk a control set around a small circle: the tube follows, and only the
-// p+1 segments it belongs to are re-evaluated.
+// p+1 segments it belongs to are re-evaluated. One turn takes the length of
+// the stage, so the point comes back where it started.
 static void an_drag(sb2gui::App& a, sb2gui::Editor&, int k)
 {
     const int i = 2;
     if (i >= (int)a.cps.size()) return;
-    const double th = 2.0 * 3.14159265358979 * k / 30.0;
-    a.cps[i].cx += 0.055 * std::cos(th);
-    a.cps[i].cy += 0.055 * std::sin(th);
+    const double turn = 1.8 * kTourFps; // images of one turn
+    const double r = 0.263;             // radius of the circle walked
+    const double th = 2.0 * kPi * k / turn;
+    const double step = 2.0 * kPi * r / turn;
+    a.cps[i].cx += step * std::cos(th);
+    a.cps[i].cy += step * std::sin(th);
     a.update_control_point(i);
 }
 
@@ -116,7 +133,8 @@ static void st_zono(sb2gui::App& a)
 // reorients the sets instead of merely rescaling them.
 static void an_turn(sb2gui::App& a, sb2gui::Editor&, int)
 {
-    const double c = std::cos(0.11), s = std::sin(0.11);
+    const double dth = 1.83 / kTourFps; // radians per second, spread over the images
+    const double c = std::cos(dth), s = std::sin(dth);
     for (int i = 0; i < (int)a.cps.size(); ++i) {
         for (sb2gui::Vec3& g : a.cps[i].gens) {
             const double x = g.x * c - g.y * s, y = g.x * s + g.y * c;
@@ -176,17 +194,22 @@ static void st_3dz(sb2gui::App& a)
     a.want_fit = true;
 }
 
-static void an_orbit(sb2gui::App&, sb2gui::Editor& e, int) { e.orbit_view(2.6f, 0.0f); }
+// The camera turns at a fixed speed, so the orbit is as long whatever the rate.
+static void an_orbit(sb2gui::App&, sb2gui::Editor& e, int)
+{
+    e.orbit_view((float)(43.3 / kTourFps), 0.0f);
+}
 
+// Durations in seconds.
 static const Stage kTour[] = {
-    {26, "Control boxes in, a guaranteed tube out", st_boxes, nullptr},
-    {30, "Drag a set: only its p+1 segments are re-evaluated", nullptr, an_drag},
-    {26, "Control points as zonotopes: oriented, sheared sets", st_zono, nullptr},
-    {26, "Generators are free vectors: the sets turn with them", nullptr, an_turn},
-    {20, "Real control points: thin zonotopes enclosing the curve", st_curve, nullptr},
-    {22, "Rational weights pull the evaluated points onto a control point", st_rational, nullptr},
-    {34, "3D: the same symbolic basis, on (x, y, z)", st_3d, an_orbit},
-    {34, "3D zonotopes: exact silhouettes, true facet meshes", st_3dz, an_orbit},
+    {1.6, "Control boxes in, a guaranteed tube out", st_boxes, nullptr},
+    {1.8, "Drag a set: only its p+1 segments are re-evaluated", nullptr, an_drag},
+    {1.6, "Control points as zonotopes: oriented, sheared sets", st_zono, nullptr},
+    {1.6, "Generators are free vectors: the sets turn with them", nullptr, an_turn},
+    {1.2, "Real control points: thin zonotopes enclosing the curve", st_curve, nullptr},
+    {1.3, "Rational weights pull the evaluated points onto a control point", st_rational, nullptr},
+    {2.0, "3D: the same symbolic basis, on (x, y, z)", st_3d, an_orbit},
+    {2.0, "3D zonotopes: exact silhouettes, true facet meshes", st_3dz, an_orbit},
 };
 
 int main(int argc, char** argv)
@@ -321,7 +344,7 @@ int main(int argc, char** argv)
             char path[512];
             std::snprintf(path, sizeof(path), "%s/f%04d.ppm", tour_dir, shot_no++);
             write_ppm(window, path);
-            if (++stage_frame >= kTour[stage].frames) { stage_frame = 0; ++stage; }
+            if (++stage_frame >= stage_length(kTour[stage])) { stage_frame = 0; ++stage; }
         }
     }
     if (tour_dir) std::printf("wrote %d tour frames to %s\n", shot_no, tour_dir);

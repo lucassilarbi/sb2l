@@ -67,8 +67,21 @@ montage -label 'u:%[label]' \
 echo "== animated tour =="
 shot --tour "$TMP"
 for f in "$TMP"/f0*.ppm; do convert "$f" -resize 760x "${f%.ppm}.png"; done
-convert -delay 6 -loop 0 "$TMP"/f0*.png "$TMP/raw.gif"
-gifsicle --optimize=3 --colors 96 --lossy=40 "$TMP/raw.gif" > "$OUT/tour.gif"
+# Two hundredths of a second between two images, the shortest delay a reader
+# honours, which is the 50 images per second the tour is captured at. The
+# stages which hold a still image cost nothing: gifsicle merges them back into
+# a single image carrying the sum of their delays.
+#
+# Every image is reduced to the same colour table, taken from a few images
+# spread over the tour, and without dithering: dithering scatters the colours
+# of one image differently from the next, and two images which show the same
+# thing then differ everywhere, which is exactly what the optimisation below
+# looks for. Keeping the table fixed and the colours clean divides the size of
+# the animation by more than two.
+convert "$TMP"/f0000.png "$TMP"/f0200.png "$TMP"/f0350.png "$TMP"/f0500.png "$TMP"/f0640.png \
+    +append -dither None -colors 160 "$TMP/palette.gif"
+convert -delay 2 -loop 0 "$TMP"/f0*.png -dither None -remap "$TMP/palette.gif" "$TMP/raw.gif"
+gifsicle --optimize=3 --lossy=30 "$TMP/raw.gif" > "$OUT/tour.gif"
 
 echo "done -> $OUT"
 ls -la "$OUT"
