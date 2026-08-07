@@ -174,7 +174,7 @@ int main()
     //     vibes::drawPolygon(zonotope.first, zonotope.second, "grey[grey]");
     // }
     //================================================== CONTROL POINTS EXAMPLE 2 ==========================================================//
-    int reserved(2); // reserved allow us to reserve some epsilon for control points. for example, if reserved=2, each control points is suppose to be defind with at most 2 affine form. 
+    int reserved(2); // reserved allow us to reserve some epsilon for control points. for example, if reserved=2, each control points is suppose to be defind with at most 2 affine form.
                      // moreover, it is really important to correcly setup epsilon numbers (the first element of std::pair<int,double>(1, 0.5)) to be consistent with reserved.
     ibex::Affine2Vector aPx = ibex::Affine2Vector(12, ibex::Affine2(0.0));
     for(int i=0;i<reserved;i++) aPx[0]+=ibex::Affine2(ibex::Interval(-1,1));

@@ -26,9 +26,9 @@ namespace sb2l {
  * RATIONAL : The basis is rational. Each control point is link to a dedicated weight
  */
 enum class CurveType{UNIFORM_RATIONAL, UNIFORM_NONRATIONAL, CLAMPED_RATIONAL, CLAMPED_NONRATIONAL};
-inline std::ostream& operator<<(std::ostream& os, CurveType ct) 
+inline std::ostream& operator<<(std::ostream& os, CurveType ct)
 {
-    switch (ct) 
+    switch (ct)
     {
         case CurveType::UNIFORM_RATIONAL: return os << "UNIFORM_RATIONAL";
         case CurveType::UNIFORM_NONRATIONAL: return os << "UNIFORM_NONRATIONAL";
@@ -43,9 +43,9 @@ inline std::ostream& operator<<(std::ostream& os, CurveType ct)
  * TAYLOR : Taylor form using extended usual operators from R, the talyor order need to be set
  */
 enum class Form{NATURAL, TAYLOR};
-inline std::ostream& operator<<(std::ostream& os, Form f) 
+inline std::ostream& operator<<(std::ostream& os, Form f)
 {
-    switch (f) 
+    switch (f)
     {
         case Form::NATURAL: return os << "NATURAL";
         case Form::TAYLOR: return os << "TAYLOR";
@@ -59,9 +59,9 @@ inline std::ostream& operator<<(std::ostream& os, Form f)
  * Z : Zonotopes
  */
 enum class ParameterSet{R, IR, Z};
-inline std::ostream& operator<<(std::ostream& os, ParameterSet ps) 
+inline std::ostream& operator<<(std::ostream& os, ParameterSet ps)
 {
-    switch (ps) 
+    switch (ps)
     {
         case ParameterSet::R: return os << "R";
         case ParameterSet::IR: return os << "IR";

@@ -156,6 +156,19 @@ zonotopes. Only the last two enclose the curve. `eval_point` returns one point p
 subdivision, taken from the middle of the basis, which is the curve itself when the
 parameter is real and a representative of the element otherwise.
 
+An element returned by `eval_zonotope` is an affine vector. Its center and its generators
+are read with `zonotope_of`, which is also where the error term each coordinate carries
+becomes one more generator, so that the zonotope obtained is the whole element.
+
+```cpp
+// Control zonotopes: one container per coordinate, as above.
+std::vector<ibex::Affine2Vector> Z(2, ibex::Affine2Vector(5));
+std::vector<std::vector<ibex::Affine2Vector>> z = spline.eval_zonotope(Z);
+
+sb2l::Zonotope e = sb2l::zonotope_of(z[0][0]);
+// e.center[i] and e.gen(k, i): coordinate i of the center and of the generator k.
+```
+
 An affine form keeps a bounded number of noise symbols, ten by default, and merges the
 smallest ones into its error term beyond that. Control zonotopes built from more
 generators are therefore reduced unless `SB2::set_affine_noise_number` raises the
@@ -174,6 +187,7 @@ and `update_point`, `update_box` and `update_zonotope` recompute it alone, in pl
 |---|---|
 | `get_p()`, `get_n()`, `get_nS()`, `get_d()` | degree, last index of the control points, number of segments, subdivisions |
 | `eval_point(P)`, `eval_box(P)`, `eval_zonotope(P)` | the curve, the boxes, the zonotopes, arranged by segment |
+| `zonotope_of(v)` | the center and the generators of one evaluated zonotope |
 | `impacted_segments(i)` | first and last segment which depend on the control point `i` |
 | `update_point/box/zonotope(P, i, out)` | recomputes that range only |
 | `get_reBf()`, `get_ieBf()`, `get_aeBf()` | the evaluated basis functions |

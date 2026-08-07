@@ -1,8 +1,7 @@
 #include "app.hpp"
 
 #include <cmath>
-#include <list>
-#include <stdexcept>
+#include <exception>
 #include <utility>
 
 namespace sb2gui {
