@@ -156,6 +156,10 @@ static void st_3d(sb2gui::App& a)
     a.ps = sb2l::ParameterSet::Z; // back to the affine parameter after the rational stage
     a.rebuild();
     a.set_dim(3);
+    // The stages before this one moved control points, so the scene counts as
+    // edited and is carried over as it is. Here the point is the space curve,
+    // so the default scene of the dimension is asked for explicitly.
+    a.reset_scene();
 }
 
 static void st_3dz(sb2gui::App& a)

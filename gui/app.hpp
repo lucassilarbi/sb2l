@@ -96,6 +96,12 @@ public:
 
     std::vector<ControlPoint> cps;
 
+    // False while the control points are still the ones the default scene was
+    // seeded with. Switching dimension then reseeds, so that the 3D editor
+    // opens on the curve written for three coordinates rather than on a plane
+    // one; once a control point has been moved, the scene is kept as it is.
+    bool scene_edited = false;
+
     // Cached draw geometry (world coordinates), refreshed by reeval().
     // Segment s owns a fixed slice of each container: the d elements at [s*d, s*d + d),
     // which is what lets a segment be redrawn in place (an R *parameter* evaluates one
@@ -121,8 +127,14 @@ public:
     void update_control_point(int i);
     // Switch between the 2D and the 3D curve: the basis is untouched, so this
     // only re-runs the evaluation over a different number of coordinate rows.
-    // The control points are kept.
+    // An edited scene is kept; an untouched one is reseeded, the default being
+    // written for its dimension.
     void set_dim(int nd);
+    // Throw the control points away and seed the default scene of the current
+    // dimension again. This is what set_dim does on its own as long as nothing
+    // has been edited; asking for it explicitly is the way back once something
+    // has.
+    void reset_scene();
     // Change the number of generators of the control zonotopes. The basis does
     // not depend on it, so this costs one evaluation, never a rebuild.
     void set_generator_count(int n);

@@ -41,6 +41,7 @@ App::App()
 
 void App::seed_default_scene()
 {
+    scene_edited = false;
     cps.clear();
     for (int i = 0; i < nCP; ++i) {
         double u = (nCP > 1) ? (double)i / (nCP - 1) : 0.0;
@@ -139,21 +140,22 @@ void App::set_dim(int nd)
     // default of two generators would make every control set a flat
     // parallelogram in space. Three is the least that gives a solid.
     if (dim == 3 && nGen < 3) nGen = 3;
-    // The scene is kept: the control points already hold their three
-    // coordinates, and the symbolic basis does not know the dimension. Only a
-    // scene which is still entirely flat is given a relief, so that the 3D
-    // canvas shows a curve outside the z = 0 plane; an edited one is left
-    // exactly as it is.
-    if (dim == 3) {
-        bool flat = true;
-        for (const ControlPoint& c : cps)
-            if (c.cz != 0.0) flat = false;
-        if (flat)
-            for (size_t i = 0; i < cps.size(); ++i) {
-                const double u = (cps.size() > 1) ? (double)i / (cps.size() - 1) : 0.0;
-                cps[i].cz = 1.2 * std::sin(2.0 * kPi * u);
-            }
-    }
+    // An edited scene is kept: the control points already hold their three
+    // coordinates, and the symbolic basis does not know the dimension, so
+    // there is nothing to throw away. A scene still untouched is the default
+    // one, and the default is written for its dimension: the plane curve is
+    // replaced by the helix, which is the one that leaves every coordinate
+    // plane and gives the orbit camera something to show.
+    if (!scene_edited)
+        seed_default_scene();
+    resize_control_points();
+    reeval();
+    want_fit = true;
+}
+
+void App::reset_scene()
+{
+    seed_default_scene();
     resize_control_points();
     reeval();
     want_fit = true;
@@ -377,6 +379,7 @@ void App::reeval()
 void App::update_control_point(int i)
 {
     if (!spline) return;
+    scene_edited = true; // the scene stops being the default one it was seeded with
     const int nS = spline->get_nS();
     const sb2l::ParameterSet ec = effective_cs();
     const size_t cached = (ec == sb2l::ParameterSet::R)  ? epoints.size()
