@@ -176,73 +176,31 @@ void App::set_generator_count(int n)
 // Boundary polygon of a 2D affine vector (center + generators + error box).
 // Takes the form already compacted: it is read by reference, so that drawing a
 // zonotope does not deep-copy its noise-term lists every frame.
+// The element is read through sb2l::zonotope_of, the one place which knows how
+// a set is taken out of an affine vector: reading it by hand is where the
+// noise terms get lost (see the warning on that function). Only the layout
+// changes here, into what the two canvases draw.
 static std::vector<Vec2> zono_from_affine(const ibex::Affine2Vector& v)
 {
-    Vec2 c{v[0].val(0), v[1].val(0)};
-
-    // Both coordinates draw on the same noise symbols but each stores only its
-    // own nonzero terms, so walk the two index-sorted lists together and emit
-    // one generator per symbol either of them uses.
-    //
-    // Do not iterate k = 1 .. size() calling val(k) instead. Affine2::size()
-    // has two definitions in the library: the one compiled here, from the
-    // header, returns the dimension of the form, which is 1, while the one
-    // inside the library returns the largest noise index it uses. Read from
-    // the outside it is therefore neither a term count nor an index bound, and
-    // such a loop reads the symbol number 1 alone -- which the noise counter,
-    // shared by every affine operation of the process, passed long ago. The
-    // generators would silently be dropped and the drawn set would be smaller
-    // than the true one. rays() is the list of the terms themselves.
-    const std::list<std::pair<int, double> >& rx = v[0].rays();
-    const std::list<std::pair<int, double> >& ry = v[1].rays();
+    const sb2l::Zonotope z = sb2l::zonotope_of(v);
+    const Vec2 c{z.center[0], z.center[1]};
     std::vector<Vec2> gens;
-    gens.reserve(rx.size() + ry.size() + 2);
-    std::list<std::pair<int, double> >::const_iterator ix = rx.begin(), iy = ry.begin();
-    while (ix != rx.end() || iy != ry.end()) {
-        if (iy == ry.end() || (ix != rx.end() && ix->first < iy->first))
-            gens.push_back({(ix++)->second, 0.0});
-        else if (ix == rx.end() || iy->first < ix->first)
-            gens.push_back({0.0, (iy++)->second});
-        else
-            gens.push_back({(ix++)->second, (iy++)->second});
-    }
-    // Accumulated error terms as axis-aligned generators (keeps over-approx).
-    if (v[0].err() > 0.0) gens.push_back({v[0].err(), 0.0});
-    if (v[1].err() > 0.0) gens.push_back({0.0, v[1].err()});
+    gens.reserve(z.m);
+    for (int k = 0; k < z.m; ++k) gens.push_back({z.gen(k, 0), z.gen(k, 1)});
     return zonotope_boundary(c, gens);
 }
 
-// 3D center + generators of a 3D affine vector: the same index-sorted merge
-// as zono_from_affine, over the three coordinate rows. The boundary itself is
-// not built here -- the camera projects these generators and the 2D walk runs
-// on the projection, so the exact silhouette costs O(m log m) per frame and
-// the O(m^2) facet mesh is never needed for result elements.
+// 3D center + generators. The boundary itself is not built here -- the camera
+// projects these generators and the 2D walk runs on the projection, so the
+// exact silhouette costs O(m log m) per frame and the O(m^2) facet mesh is
+// never needed for result elements.
 static Zono3 zono3_from_affine(const ibex::Affine2Vector& v)
 {
+    const sb2l::Zonotope zo = sb2l::zonotope_of(v);
     Zono3 z;
-    z.c = {v[0].val(0), v[1].val(0), v[2].val(0)};
-
-    typedef std::list<std::pair<int, double> >::const_iterator It;
-    const std::list<std::pair<int, double> >* rays[3] = {&v[0].rays(), &v[1].rays(), &v[2].rays()};
-    It it[3];
-    for (int r = 0; r < 3; ++r) it[r] = rays[r]->begin();
-    z.gens.reserve(rays[0]->size() + rays[1]->size() + rays[2]->size() + 3);
-
-    for (;;) {
-        int idx = -1; // smallest live noise-symbol index across the three rows
-        for (int r = 0; r < 3; ++r)
-            if (it[r] != rays[r]->end() && (idx < 0 || it[r]->first < idx)) idx = it[r]->first;
-        if (idx < 0) break;
-        Vec3 g{0.0, 0.0, 0.0};
-        double* comp[3] = {&g.x, &g.y, &g.z};
-        for (int r = 0; r < 3; ++r)
-            if (it[r] != rays[r]->end() && it[r]->first == idx) *comp[r] = (it[r]++)->second;
-        z.gens.push_back(g);
-    }
-    // Accumulated error terms as axis-aligned generators (keeps over-approx).
-    if (v[0].err() > 0.0) z.gens.push_back({v[0].err(), 0.0, 0.0});
-    if (v[1].err() > 0.0) z.gens.push_back({0.0, v[1].err(), 0.0});
-    if (v[2].err() > 0.0) z.gens.push_back({0.0, 0.0, v[2].err()});
+    z.c = {zo.center[0], zo.center[1], zo.center[2]};
+    z.gens.reserve(zo.m);
+    for (int k = 0; k < zo.m; ++k) z.gens.push_back({zo.gen(k, 0), zo.gen(k, 1), zo.gen(k, 2)});
     return z;
 }
 

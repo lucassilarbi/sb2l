@@ -82,6 +82,10 @@ for f in "$TMP"/f0*.ppm; do convert "$f" -resize 760x "${f%.ppm}.png"; done
 # rate and the stage durations written in gui/main.cpp, and naming them here
 # would break every time one of those changes.
 mapfile -t FRAMES < <(ls "$TMP"/f0*.png)
+if [ "${#FRAMES[@]}" -eq 0 ]; then
+    echo "the tour produced no image: check that the editor runs under xvfb" >&2
+    exit 1
+fi
 PALETTE_SRC=()
 for k in 0 1 2 3 4; do
     PALETTE_SRC+=("${FRAMES[$(( k * (${#FRAMES[@]} - 1) / 4 ))]}")

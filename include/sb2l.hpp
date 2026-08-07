@@ -70,6 +70,41 @@ inline std::ostream& operator<<(std::ostream& os, ParameterSet ps)
     }
 }
 
+/**
+ * \brief the center and the generators of the zonotope an affine vector
+ * stands for: { c + sum_k s_k g_k : s_k in [-1, 1] }.
+ */
+struct Zonotope
+{
+    int dim = 0;                    // number of coordinates
+    int m = 0;                      // number of generators
+    std::vector<double> center;     // dim entries
+    std::vector<double> generators; // dim * m entries, generator k first
+    /**
+     * @brief coordinate i of the generator k
+     */
+    double gen(const int k, const int i) const { return generators[(size_t)k * dim + i]; }
+};
+
+/**
+ * @brief read an element returned by eval_zonotope or update_zonotope.
+ *
+ * Read it through this and never through Affine2::size() and Affine2::val(i):
+ * outside of the interval library those two do not give what their names
+ * suggest. size() gives the number of coordinates of the form, not the number
+ * of its noise terms, and the terms are numbered by a counter shared by every
+ * affine operation of the process, so their numbers are arbitrary. A loop over
+ * 1 to size() calling val(i) therefore finds almost nothing and the set read
+ * back is smaller than the element, which is the one mistake this arithmetic
+ * cannot afford.
+ *
+ * The error term each coordinate carries is returned as one more generator,
+ * along its own axis, so that the zonotope described is the whole element.
+ * Calling Affine2Vector::compact() on the element first keeps the list of
+ * generators short.
+ */
+Zonotope zonotope_of(const ibex::Affine2Vector &v);
+
 class SB2
 {
     public:

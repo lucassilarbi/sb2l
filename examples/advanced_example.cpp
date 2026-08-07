@@ -20,43 +20,18 @@
 
 std::pair<std::vector<double>, std::vector<double>> compute_zonotope2D(ibex::Affine2Vector &v) // compute the zonotope resulting from two affine forms
 {
-    v.compact();
-    int m(v.size()); // number of affine forms
-    if (m != 2)
+    v.compact(); // shortens the list of noise terms, nothing else
+    if (v.size() != 2)
         throw std::runtime_error("The zonotope is drawn in the plane: exactly two affine forms are expected");
-    // compute the center points
-    std::vector<double> c(m, 0); // center points
-    for (int i = 0; i < m; i++)
-    {
-        c[i] = v[i].val(0);
-    }
-    // Generator vectors. They are read from the list of noise terms of each
-    // form, not from an index loop: the noise symbols come from a counter
-    // shared by every affine operation of the process, so their indices are
-    // arbitrary numbers, and Affine2::size() read from outside the library
-    // gives the dimension of the form rather than a bound on them. Both forms
-    // draw on the same symbols and each keeps only its own non-zero terms, so
-    // the two index-sorted lists are walked together and one generator is
-    // emitted per symbol either of them uses.
-    const std::list<std::pair<int, double>> &rx = v[0].rays();
-    const std::list<std::pair<int, double>> &ry = v[1].rays();
+    // The center and the generators of the element, read through the library:
+    // sb2l::zonotope_of is the one function which knows how a set comes out of
+    // an affine vector, and its documentation says why reading it by hand,
+    // through size() and val(i), loses the generators without a word.
+    const sb2l::Zonotope z = sb2l::zonotope_of(v);
+    const std::vector<double> c = z.center;
     std::vector<std::vector<double>> G;
-    std::list<std::pair<int, double>>::const_iterator ix = rx.begin(), iy = ry.begin();
-    while (ix != rx.end() || iy != ry.end())
-    {
-        if (iy == ry.end() || (ix != rx.end() && ix->first < iy->first))
-            G.push_back({(ix++)->second, 0.0});
-        else if (ix == rx.end() || iy->first < ix->first)
-            G.push_back({0.0, (iy++)->second});
-        else
-            G.push_back({(ix++)->second, (iy++)->second});
-    }
-    // The error term each form accumulates, as an axis-aligned generator. It
-    // is part of the set, so leaving it out would draw less than the enclosure.
-    if (v[0].err() > 0.0)
-        G.push_back({v[0].err(), 0.0});
-    if (v[1].err() > 0.0)
-        G.push_back({0.0, v[1].err()});
+    for (int k = 0; k < z.m; k++)
+        G.push_back({z.gen(k, 0), z.gen(k, 1)});
     // Boundary of { c + sum s_i*G_i : s_i in [-1,1] } by the O(m log m)
     // Minkowski walk: exactly 2*m vertices, already counter-clockwise.
     // Replaces the 2^m vertex enumeration + convex hull.

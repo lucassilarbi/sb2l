@@ -11,8 +11,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <list>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 // When the parameter is affine and the control points are boxes, evaluate the
 // whole linear combination in affine arithmetic and take the hull of the
@@ -25,6 +27,57 @@
 #endif
 
 namespace sb2l {
+
+Zonotope zonotope_of(const ibex::Affine2Vector &v)
+{
+    Zonotope z;
+    z.dim = v.size();
+    if (z.dim < 1)
+        return z;
+    z.center.resize(z.dim);
+    for (int i = 0; i < z.dim; i++)
+        z.center[i] = v[i].val(0);
+
+    // Every coordinate draws on the same noise terms but keeps only its own
+    // non-zero ones, and each list is sorted by term number. Walking the lists
+    // together, smallest number first, gives one generator per term any
+    // coordinate uses, with the coordinates which do not use it left at zero.
+    typedef std::list<std::pair<int, double>>::const_iterator It;
+    std::vector<const std::list<std::pair<int, double>> *> rays(z.dim);
+    std::vector<It> it(z.dim);
+    for (int i = 0; i < z.dim; i++)
+    {
+        rays[i] = &v[i].rays();
+        it[i] = rays[i]->begin();
+    }
+    for (;;)
+    {
+        int number = -1; // smallest term number still ahead, over all coordinates
+        for (int i = 0; i < z.dim; i++)
+            if (it[i] != rays[i]->end() && (number < 0 || it[i]->first < number))
+                number = it[i]->first;
+        if (number < 0)
+            break;
+        const size_t base = z.generators.size();
+        z.generators.resize(base + z.dim, 0.0);
+        for (int i = 0; i < z.dim; i++)
+            if (it[i] != rays[i]->end() && it[i]->first == number)
+                z.generators[base + i] = (it[i]++)->second;
+        z.m++;
+    }
+    // The error term each coordinate accumulated, along its own axis. It is
+    // part of the element, so leaving it out would describe less than it.
+    for (int i = 0; i < z.dim; i++)
+    {
+        if (v[i].err() <= 0.0)
+            continue;
+        const size_t base = z.generators.size();
+        z.generators.resize(base + z.dim, 0.0);
+        z.generators[base + i] = v[i].err();
+        z.m++;
+    }
+    return z;
+}
 
 SB2::SB2(const int p,
            const int nCP,

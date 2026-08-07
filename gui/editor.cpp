@@ -34,6 +34,17 @@ static void zono_extent(const ControlPoint& cp, double& ex, double& ey)
     for (const Vec3& g : cp.gens) { ex += std::fabs(g.x); ey += std::fabs(g.y); }
 }
 
+// The generators a control zonotope is drawn and picked from, in space. The
+// reduction is a guard on the cost of the facet enumeration, which is
+// quadratic: below its limit it only merges parallel generators, which is
+// exact. Everything that has to agree on the shape of one control zonotope --
+// the faces, the outline, the click -- goes through this, so the three cannot
+// answer differently.
+static std::vector<Vec3> shown_gens3(const ControlPoint& cp)
+{
+    return reduce_generators(cp.gens, 16);
+}
+
 // Per-axis extents of a zonotope in 3D (its AABB half-widths).
 static Vec3 zono_extent3(const ControlPoint& cp)
 {
@@ -567,7 +578,7 @@ Editor::Selection Editor::hit_test3(ImVec2 m) const
             const std::vector<Vec3> bg = {{c.hx, 0.0, 0.0}, {0.0, c.hy, 0.0}, {0.0, 0.0, c.hz}};
             if (silhouette3(ctr, bg)) hit = inside_screen_poly(pts_, m);
         } else if (!hit && a.cs == sb2l::ParameterSet::Z) {
-            if (silhouette3(ctr, c.gens)) hit = inside_screen_poly(pts_, m);
+            if (silhouette3(ctr, shown_gens3(c))) hit = inside_screen_poly(pts_, m);
         }
         if (hit) {
             const Kind kind = (a.cs == sb2l::ParameterSet::R)  ? Kind::Point
@@ -653,14 +664,42 @@ void Editor::draw_scene3(ImDrawList* dl) const
     const Vec3 fwd = cam_.fwd;
 
     // Ground grid in the x-y plane, plus the three world axes: x red, y green,
-    // z blue -- without them an orthographic view gives no sense of orientation.
-    for (int i = -3; i <= 3; ++i) {
-        dl->AddLine(cam_.to_screen({(double)i, -3.0, 0.0}), cam_.to_screen({(double)i, 3.0, 0.0}), col_grid);
-        dl->AddLine(cam_.to_screen({-3.0, (double)i, 0.0}), cam_.to_screen({3.0, (double)i, 0.0}), col_grid);
+    // z blue -- without them an orthographic view gives no sense of
+    // orientation. The grid follows the zoom instead of covering a fixed patch
+    // of the plane, which a scene of another size leaves either far outside the
+    // canvas or reduced to a stamp near the origin. Its step is the round
+    // number closest to about 120 pixels, so it reads the same at any zoom, and
+    // it is laid over the part of the plane the canvas shows: the number of
+    // lines therefore only depends on the size of the canvas.
+    double step = 120.0 / cam_.scale;
+    const double decade = std::pow(10.0, std::floor(std::log10(step)));
+    const double lead = step / decade;
+    step = (lead < 1.5 ? 1.0 : lead < 3.5 ? 2.0 : lead < 7.5 ? 5.0 : 10.0) * decade;
+    // Half the canvas in world units, widened because the plane is seen at an
+    // angle and reaches further than the view directions do.
+    const double reach = 0.8 * (double)std::max(cam_.size.x, cam_.size.y) / cam_.scale;
+    const int n = (int)std::ceil(reach / step);
+    const double gx = std::floor(cam_.target.x / step) * step;
+    const double gy = std::floor(cam_.target.y / step) * step;
+    // Faded away from the middle of the view: covering the whole canvas at one
+    // strength turns the ground into graph paper and takes the eye off the
+    // curve, which is what the canvas is for.
+    const auto grid_line = [n](int i) {
+        const float t = (n > 0) ? (float)std::abs(i) / (float)n : 0.0f;
+        const float a = 1.0f - t * t;
+        return IM_COL32(58, 58, 62, (int)(255.0f * (a > 0.0f ? a : 0.0f)));
+    };
+    for (int i = -n; i <= n; ++i) {
+        const double x = gx + i * step, y = gy + i * step;
+        dl->AddLine(cam_.to_screen({x, gy - n * step, 0.0}), cam_.to_screen({x, gy + n * step, 0.0}), grid_line(i));
+        dl->AddLine(cam_.to_screen({gx - n * step, y, 0.0}), cam_.to_screen({gx + n * step, y, 0.0}), grid_line(i));
     }
-    dl->AddLine(cam_.to_screen({0, 0, 0}), cam_.to_screen({1.5, 0, 0}), IM_COL32(220, 90, 90, 255), 2.0f);
-    dl->AddLine(cam_.to_screen({0, 0, 0}), cam_.to_screen({0, 1.5, 0}), IM_COL32(90, 220, 90, 255), 2.0f);
-    dl->AddLine(cam_.to_screen({0, 0, 0}), cam_.to_screen({0, 0, 1.5}), IM_COL32(90, 130, 240, 255), 2.0f);
+    // The axes are drawn to the grid's step, so the origin stays marked
+    // whatever the zoom rather than shrinking to a dot or filling the canvas.
+    const double axis = 1.5 * step;
+    dl->AddLine(cam_.to_screen({0, 0, 0}), cam_.to_screen({axis, 0, 0}), IM_COL32(220, 90, 90, 255), 2.0f);
+    dl->AddLine(cam_.to_screen({0, 0, 0}), cam_.to_screen({0, axis, 0}), IM_COL32(90, 220, 90, 255), 2.0f);
+    dl->AddLine(cam_.to_screen({0, 0, 0}), cam_.to_screen({0, 0, axis}), IM_COL32(90, 130, 240, 255), 2.0f);
 
     // Control polygon.
     if (a.cps.size() >= 2) {
@@ -758,11 +797,7 @@ void Editor::draw_scene3(ImDrawList* dl) const
             // The true 3D shape of the control zonotope: its facet mesh (few
             // generators, so the O(m^2)-facet enumeration is cheap here),
             // front faces lightly filled, plus the exact silhouette outline.
-            // The reduced list drives both the mesh and the outline: the
-            // reduction encloses the control zonotope, so drawing the outline
-            // of the raw generators instead would trace a set the filled
-            // faces do not match.
-            const std::vector<Vec3> red = reduce_generators(c.gens, 16);
+            const std::vector<Vec3> red = shown_gens3(c);
             const std::vector<ZFace> mesh = zonotope_mesh(ctr, red);
             for (const ZFace& fc : mesh) {
                 const double facing = dot(fc.n, fwd);
