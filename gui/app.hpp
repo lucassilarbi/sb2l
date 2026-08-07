@@ -106,14 +106,15 @@ public:
     // Segment s owns a fixed slice of each container: the d elements at [s*d, s*d + d),
     // which is what lets a segment be redrawn in place (an R *parameter* evaluates one
     // extra element at the very end, closing the curve, hence the trailing slot).
-    std::vector<std::vector<Vec3>> polylines;  // R over R: the evaluated points
+    // The real-real pair evaluates to one point per subdivision and nothing
+    // joins two of them, so these are drawn as separate dots, never as a line.
+    std::vector<Vec3> points;
     std::vector<Box> boxes;                    // effective IR: result boxes
     std::vector<std::vector<Vec2>> zonos;      // effective Z, dim 2: result zonotope polygons
     std::vector<Zono3> zonos3;                 // effective Z, dim 3: center + generators
 
     std::string status;                        // last rebuild/eval message
     std::string banner;                        // caption drawn over the canvas, if set
-    bool dirty_structural = true;
     bool want_fit = false;                     // consumed by the editor: refit view
 
     App();

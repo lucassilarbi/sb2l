@@ -115,7 +115,6 @@ void App::rebuild()
         sb2l::SB2::set_affine_noise_number(nCP * nGen + 16);
 
         spline.reset(new sb2l::SB2(p, nCP, ct, f, ps, d, t, W));
-        dirty_structural = false;
         status = "OK";
         reeval();
     } catch (const std::exception& e) {
@@ -123,7 +122,7 @@ void App::rebuild()
         epoints.clear();
         eboxes.clear();
         ezonos.clear();
-        polylines.clear();
+        points.clear();
         boxes.clear();
         zonos.clear();
         zonos3.clear();
@@ -185,10 +184,15 @@ static std::vector<Vec2> zono_from_affine(const ibex::Affine2Vector& v)
     // own nonzero terms, so walk the two index-sorted lists together and emit
     // one generator per symbol either of them uses.
     //
-    // Do not iterate k = 1 .. size() calling val(k) instead: noise indices come
-    // from a global counter that every affine multiplication bumps and nothing
-    // ever resets, so size() is a symbol index in the millions after a few
-    // seconds of dragging, not a term count, and that loop grows without bound.
+    // Do not iterate k = 1 .. size() calling val(k) instead. Affine2::size()
+    // has two definitions in the library: the one compiled here, from the
+    // header, returns the dimension of the form, which is 1, while the one
+    // inside the library returns the largest noise index it uses. Read from
+    // the outside it is therefore neither a term count nor an index bound, and
+    // such a loop reads the symbol number 1 alone -- which the noise counter,
+    // shared by every affine operation of the process, passed long ago. The
+    // generators would silently be dropped and the drawn set would be smaller
+    // than the true one. rays() is the list of the terms themselves.
     const std::list<std::pair<int, double> >& rx = v[0].rays();
     const std::list<std::pair<int, double> >& ry = v[1].rays();
     std::vector<Vec2> gens;
@@ -297,13 +301,13 @@ void App::alloc_geometry()
     // (SB2::du_count), whatever set the control points live in.
     const int n = nS * dd + (ps == sb2l::ParameterSet::R ? 1 : 0);
     const sb2l::ParameterSet ec = effective_cs();
-    polylines.clear();
+    points.clear();
     boxes.clear();
     zonos.clear();
     zonos3.clear();
     if (ec == sb2l::ParameterSet::R) {
         // The evaluated points of the real-real pair, one slot per sample.
-        polylines.assign(1, std::vector<Vec3>(n));
+        points.assign(n, Vec3{});
     } else if (ec == sb2l::ParameterSet::IR) {
         boxes.assign(n, Box{});
     } else if (dim == 3) {
@@ -323,7 +327,7 @@ void App::refresh_geometry(int s0, int s1)
         if (ec == sb2l::ParameterSet::R) {
             const std::vector<std::vector<double>>& seg = epoints[s];
             for (size_t du = 0; du < seg.size(); ++du)
-                polylines[0][s * dd + du] = {seg[du][0], seg[du][1], dim == 3 ? seg[du][2] : 0.0};
+                points[s * dd + du] = {seg[du][0], seg[du][1], dim == 3 ? seg[du][2] : 0.0};
         } else if (ec == sb2l::ParameterSet::IR) {
             const std::vector<ibex::IntervalVector>& seg = eboxes[s];
             for (size_t du = 0; du < seg.size(); ++du) {
@@ -368,7 +372,7 @@ void App::reeval()
         epoints.clear();
         eboxes.clear();
         ezonos.clear();
-        polylines.clear();
+        points.clear();
         boxes.clear();
         zonos.clear();
         zonos3.clear();

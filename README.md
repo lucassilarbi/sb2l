@@ -90,7 +90,7 @@ sudo docker run -it --privileged -e DISPLAY=$DISPLAY \
 Tested on Ubuntu 22.04.
 
 ```bash
-sudo apt-get install cmake libgmp-dev python3 flex bison gcc g++ make \
+sudo apt-get install git cmake libgmp-dev python3 flex bison gcc g++ make \
                      pkg-config libfuse2
 sudo apt-get install libglfw3-dev libgl1-mesa-dev    # editor only
 
@@ -162,8 +162,9 @@ generators are therefore reduced unless `SB2::set_affine_noise_number` raises th
 number first.
 
 Every argument of the constructor is checked, and so is the shape of the control points:
-an out-of-range degree, number of subdivisions or Taylor order, a missing coordinate or
-two coordinates of different lengths all raise `std::runtime_error`.
+an out-of-range degree, number of subdivisions or Taylor order, a missing coordinate,
+two coordinates of different lengths, and weights given to a non-rational curve all raise
+`std::runtime_error`.
 
 A control point contributes to at most `p + 1` segments, the local support of its basis
 function. When only one control point has changed, `impacted_segments(i)` gives that range
@@ -179,8 +180,8 @@ and `update_point`, `update_box` and `update_zonotope` recompute it alone, in pl
 | `get_reBf_diff(k)`, `get_ieBf_diff(k)`, `get_aeBf_diff(k)` | their derivative of order `k` |
 | `get_rdu()`, `get_idu()`, `get_adu()` | the subdivisions of the parameter |
 
-Weights are given as exact rational numbers, one per control point, and select a rational
-B-spline.
+Weights are given as exact rational numbers, one per control point, and go with a rational
+curve type.
 
 <img src="docs/img/rational.png" width="520" alt="a weight bringing the curve onto its control point">
 
@@ -235,9 +236,11 @@ projection of a zonotope is again a zonotope, whose boundary is calculated from 
 projected generators. And the boundary of a control zonotope in space is calculated
 directly from its pairs of generators, without the convex hull of its vertices.
 
-Every figure of this file is produced by the editor itself:
+Every figure of this file is produced by the editor itself, which the script
+below drives; it also needs ImageMagick and gifsicle to assemble them.
 
 ```bash
+sudo apt-get install imagemagick gifsicle
 ./docs/make_assets.sh
 ```
 

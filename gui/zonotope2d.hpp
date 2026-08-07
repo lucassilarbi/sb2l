@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 #include <vector>
 
 namespace sb2gui {
@@ -41,12 +42,25 @@ inline std::vector<Vec2> zonotope_boundary(const Vec2& c, const std::vector<Vec2
     }
     if (g.empty()) return {c};
 
-    // Every generator now lies in the half-plane [0, pi), so a positive cross
-    // product is exactly "a has the smaller angle" -- same order as comparing
-    // atan2, without a transcendental call per comparison.
-    std::sort(g.begin(), g.end(), [](const Vec2& a, const Vec2& b) {
-        return a.x * b.y - a.y * b.x > 0.0;
-    });
+    // Sort by angle. Comparing two generators by the sign of their cross
+    // product reads well but is not safe: on three nearly parallel generators,
+    // which affine forms produce in numbers, rounding can make the comparison
+    // intransitive, and std::sort then walks out of the sequence. So each
+    // generator gets a number computed once, and the sort compares numbers.
+    //
+    // x / (|x| + y) decreases from 1 to -1 as the angle goes from 0 to pi over
+    // the half-plane the generators were just folded into (y > 0, or y == 0
+    // and x > 0, so the denominator is never zero): the same order as the
+    // angle, reversed, without a transcendental call.
+    std::vector<std::pair<double, Vec2> > keyed;
+    keyed.reserve(g.size());
+    for (const Vec2& e : g)
+        keyed.push_back(std::make_pair(e.x / (std::fabs(e.x) + e.y), e));
+    std::sort(keyed.begin(), keyed.end(),
+              [](const std::pair<double, Vec2>& a, const std::pair<double, Vec2>& b) {
+                  return a.first > b.first;
+              });
+    for (size_t i = 0; i < g.size(); ++i) g[i] = keyed[i].second;
 
     // Start at the bottom-most vertex: c minus the sum of all generators.
     Vec2 p = c;

@@ -175,7 +175,9 @@ void Editor::draw_controls_window()
     changed |= ImGui::SliderInt("degree p", &a.p, 1, 8);
     changed |= ImGui::SliderInt("num control pts", &a.nCP, a.p + 1, 24);
     changed |= ImGui::SliderInt("subdivisions d", &a.d, 1, 60);
-    changed |= ImGui::SliderInt("taylor t (-1=auto)", &a.t, -1, 11);
+    // The Taylor order only means something for the Taylor form.
+    if (a.f == sb2l::Form::TAYLOR)
+        changed |= ImGui::SliderInt("taylor t (-1=auto)", &a.t, -1, 11);
 
     const char* curve_types[] = {"UNIFORM_RATIONAL", "UNIFORM_NONRATIONAL",
                                  "CLAMPED_RATIONAL", "CLAMPED_NONRATIONAL"};
@@ -255,14 +257,25 @@ void Editor::fit_view()
     App& a = app_;
     if (a.cps.empty()) return;
     double x0 = a.cps[0].cx, x1 = x0, y0 = a.cps[0].cy, y1 = y0;
+    const auto grow = [&](double x, double y) {
+        x0 = std::min(x0, x); x1 = std::max(x1, x);
+        y0 = std::min(y0, y); y1 = std::max(y1, y);
+    };
     for (const ControlPoint& c : a.cps) {
         double ex = c.hx, ey = c.hy, zx, zy;
         zono_extent(c, zx, zy);
         if (zx > ex) ex = zx;
         if (zy > ey) ey = zy;
-        x0 = std::min(x0, c.cx - ex); x1 = std::max(x1, c.cx + ex);
-        y0 = std::min(y0, c.cy - ey); y1 = std::max(y1, c.cy + ey);
+        grow(c.cx - ex, c.cy - ey);
+        grow(c.cx + ex, c.cy + ey);
     }
+    // The result too: a parameter set wide enough, or a rational basis, takes
+    // it well outside the control points, and framing the control points alone
+    // would then cut the very thing the view is for.
+    for (const Vec3& q : a.points) grow(q.x, q.y);
+    for (const Box& b : a.boxes) { grow(b.x0, b.y0); grow(b.x1, b.y1); }
+    for (const std::vector<Vec2>& z : a.zonos)
+        for (const Vec2& q : z) grow(q.x, q.y);
     double w = std::max(1e-3, x1 - x0), h = std::max(1e-3, y1 - y0);
     float sx = canvas_.size.x * 0.85f / (float)w;
     float sy = canvas_.size.y * 0.85f / (float)h;
@@ -410,9 +423,8 @@ void Editor::draw_scene(ImDrawList* dl) const
     // Result geometry. The real-real pair is a discretization: the result is
     // the list of evaluated points, drawn as such -- nothing encloses the
     // curve between two samples, so no line joins them.
-    for (const std::vector<Vec3>& line : a.polylines)
-        for (const Vec3& q : line)
-            dl->AddCircleFilled(canvas_.to_screen(q.x, q.y), 2.5f, col_curve);
+    for (const Vec3& q : a.points)
+        dl->AddCircleFilled(canvas_.to_screen(q.x, q.y), 2.5f, col_curve);
     for (const Box& b : a.boxes) {
         ImVec2 p0 = canvas_.to_screen(b.x0, b.y1); // top-left in screen
         ImVec2 p1 = canvas_.to_screen(b.x1, b.y0);
@@ -471,13 +483,26 @@ void Editor::fit_view3()
     App& a = app_;
     if (a.cps.empty()) return;
     Vec3 lo{a.cps[0].cx, a.cps[0].cy, a.cps[0].cz}, hi = lo;
+    const auto grow = [&](const Vec3& q) {
+        lo.x = std::min(lo.x, q.x); hi.x = std::max(hi.x, q.x);
+        lo.y = std::min(lo.y, q.y); hi.y = std::max(hi.y, q.y);
+        lo.z = std::min(lo.z, q.z); hi.z = std::max(hi.z, q.z);
+    };
     for (const ControlPoint& c : a.cps) {
         Vec3 e{c.hx, c.hy, c.hz};
         const Vec3 z = zono_extent3(c);
         e.x = std::max(e.x, z.x); e.y = std::max(e.y, z.y); e.z = std::max(e.z, z.z);
-        lo.x = std::min(lo.x, c.cx - e.x); hi.x = std::max(hi.x, c.cx + e.x);
-        lo.y = std::min(lo.y, c.cy - e.y); hi.y = std::max(hi.y, c.cy + e.y);
-        lo.z = std::min(lo.z, c.cz - e.z); hi.z = std::max(hi.z, c.cz + e.z);
+        grow({c.cx - e.x, c.cy - e.y, c.cz - e.z});
+        grow({c.cx + e.x, c.cy + e.y, c.cz + e.z});
+    }
+    // The result too, for the same reason as on the plane canvas.
+    for (const Vec3& q : a.points) grow(q);
+    for (const Box& b : a.boxes) { grow({b.x0, b.y0, b.z0}); grow({b.x1, b.y1, b.z1}); }
+    for (const Zono3& z : a.zonos3) {
+        Vec3 e{0.0, 0.0, 0.0};
+        for (const Vec3& g : z.gens) { e.x += std::fabs(g.x); e.y += std::fabs(g.y); e.z += std::fabs(g.z); }
+        grow({z.c.x - e.x, z.c.y - e.y, z.c.z - e.z});
+        grow({z.c.x + e.x, z.c.y + e.y, z.c.z + e.z});
     }
     cam_.target = 0.5 * (lo + hi);
     const double diam = std::max(1e-3, norm(hi - lo));
@@ -701,9 +726,8 @@ void Editor::draw_scene3(ImDrawList* dl) const
 
     // The evaluated points of the real-real pair, on top of the fills (a
     // discretization: no line joins two samples).
-    for (const std::vector<Vec3>& line : a.polylines)
-        for (const Vec3& q : line)
-            dl->AddCircleFilled(cam_.to_screen(q), 2.5f, col_curve);
+    for (const Vec3& q : a.points)
+        dl->AddCircleFilled(cam_.to_screen(q), 2.5f, col_curve);
 
     // Control-point handles (on top).
     for (const ControlPoint& c : a.cps) {
@@ -734,6 +758,10 @@ void Editor::draw_scene3(ImDrawList* dl) const
             // The true 3D shape of the control zonotope: its facet mesh (few
             // generators, so the O(m^2)-facet enumeration is cheap here),
             // front faces lightly filled, plus the exact silhouette outline.
+            // The reduced list drives both the mesh and the outline: the
+            // reduction encloses the control zonotope, so drawing the outline
+            // of the raw generators instead would trace a set the filled
+            // faces do not match.
             const std::vector<Vec3> red = reduce_generators(c.gens, 16);
             const std::vector<ZFace> mesh = zonotope_mesh(ctr, red);
             for (const ZFace& fc : mesh) {
@@ -743,7 +771,7 @@ void Editor::draw_scene3(ImDrawList* dl) const
                 for (int k = 0; k < 4; ++k) q[k] = cam_.to_screen(fc.v[k]);
                 dl->AddQuadFilled(q[0], q[1], q[2], q[3], shade(col_handle_f, 0.55f + 0.45f * (float)-facing));
             }
-            if (silhouette3(ctr, c.gens) || pts_.size() == 2)
+            if (silhouette3(ctr, red) || pts_.size() == 2)
                 dl->AddPolyline(pts_.data(), (int)pts_.size(), col_handle, ImDrawFlags_Closed, 1.0f);
             // One spoke per generator, grabbable at either tip.
             for (const Vec3& g : c.gens) {

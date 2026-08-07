@@ -68,9 +68,9 @@ inline std::vector<Vec3> reduce_generators(const std::vector<Vec3>& gens, int ma
     for (const Vec3& e : gens)
         if (e.x != 0.0 || e.y != 0.0 || e.z != 0.0) g.push_back(e);
 
-    // Largest first, so the merge keeps the dominant direction as pivot and
-    // the box (step 2) only ever swallows the tail.
-    std::sort(g.begin(), g.end(), [](const Vec3& a, const Vec3& b) { return dot(a, a) > dot(b, b); });
+    // Largest first, so the merge keeps the dominant direction as pivot.
+    const auto longest_first = [](const Vec3& a, const Vec3& b) { return dot(a, a) > dot(b, b); };
+    std::sort(g.begin(), g.end(), longest_first);
 
     const double eps = 1e-12;
     std::vector<Vec3> kept;
@@ -87,6 +87,11 @@ inline std::vector<Vec3> reduce_generators(const std::vector<Vec3>& gens, int ma
         }
         if (!merged) kept.push_back(e);
     }
+
+    // Merging lengthens the generator it merges into, so the order above no
+    // longer holds. Restore it, otherwise the box below swallows generators
+    // which are not the smallest ones and the enclosure is looser than needed.
+    std::sort(kept.begin(), kept.end(), longest_first);
 
     if (max_g >= 3 && (int)kept.size() > max_g) {
         Vec3 box{0.0, 0.0, 0.0};

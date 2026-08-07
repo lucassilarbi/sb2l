@@ -3,16 +3,18 @@ cmake_minimum_required(VERSION 3.20)
 find_package(glfw3 REQUIRED)
 find_package(OpenGL REQUIRED)
 
-set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/3rd/imgui)
+# Relative to this project, not to the top of whatever build includes it: the
+# editor still builds when sb2l is added as a subdirectory of a larger project.
+set(IMGUI_DIR ${PROJECT_SOURCE_DIR}/3rd/imgui)
 
 # Vendored Dear ImGui (core + GLFW/OpenGL3 backends). The opengl3 backend ships
-# its own GL loader, so no glad/glew is needed.
+# its own GL loader, so no glad/glew is needed. imgui_demo.cpp is left out: the
+# editor never opens the demo window.
 add_library(imgui STATIC
     ${IMGUI_DIR}/imgui.cpp
     ${IMGUI_DIR}/imgui_draw.cpp
     ${IMGUI_DIR}/imgui_tables.cpp
     ${IMGUI_DIR}/imgui_widgets.cpp
-    ${IMGUI_DIR}/imgui_demo.cpp
     ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
     ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
 )

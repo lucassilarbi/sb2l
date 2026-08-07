@@ -10,64 +10,82 @@
 #include <sb2l.hpp>
 #include "vibes.h"
 
+#include <algorithm>
+#include <cmath>
+#include <iostream>
+#include <list>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
 std::pair<std::vector<double>, std::vector<double>> compute_zonotope2D(ibex::Affine2Vector &v) // compute the zonotope resulting from two affine forms
 {
     v.compact();
     int m(v.size()); // number of affine forms
-    if (m > 2)
-    {
-        throw std::runtime_error("The number of affine form can not exceed 2");
-        return std::pair<std::vector<double>, std::vector<double>>(std::vector<double>({}), std::vector<double>({}));
-    }
-    // compute the center points (also works for m>2)
+    if (m != 2)
+        throw std::runtime_error("The zonotope is drawn in the plane: exactly two affine forms are expected");
+    // compute the center points
     std::vector<double> c(m, 0); // center points
     for (int i = 0; i < m; i++)
     {
         c[i] = v[i].val(0);
     }
-    // compute genrator vectors (also works for m>2)
-    int G_size(v[0].size());
-    for (int i = 1; i < m; i++)
+    // Generator vectors. They are read from the list of noise terms of each
+    // form, not from an index loop: the noise symbols come from a counter
+    // shared by every affine operation of the process, so their indices are
+    // arbitrary numbers, and Affine2::size() read from outside the library
+    // gives the dimension of the form rather than a bound on them. Both forms
+    // draw on the same symbols and each keeps only its own non-zero terms, so
+    // the two index-sorted lists are walked together and one generator is
+    // emitted per symbol either of them uses.
+    const std::list<std::pair<int, double>> &rx = v[0].rays();
+    const std::list<std::pair<int, double>> &ry = v[1].rays();
+    std::vector<std::vector<double>> G;
+    std::list<std::pair<int, double>>::const_iterator ix = rx.begin(), iy = ry.begin();
+    while (ix != rx.end() || iy != ry.end())
     {
-        if (v[i].size() > G_size)
-            G_size = v[i].size();
+        if (iy == ry.end() || (ix != rx.end() && ix->first < iy->first))
+            G.push_back({(ix++)->second, 0.0});
+        else if (ix == rx.end() || iy->first < ix->first)
+            G.push_back({0.0, (iy++)->second});
+        else
+            G.push_back({(ix++)->second, (iy++)->second});
     }
-    // std::vector<std::vector<double>> G(G_size, std::vector<double>(m, 0));
-    std::vector<std::vector<double>> uG(G_size, std::vector<double>(m, 0)); // uncompact generator vector
-    for (int i = 0; i < m; i++)
-    {
-        for (int j = 0; j < G_size; j++)
-        {
-            uG[j][i] = v[i].val(j + 1);
-        }
-    }
-    // compact the generator vector (from here on, the code only works in 2D)
-    std::vector<std::vector<double>> G({}); // compact generator vector
-    for (int j = 0; j < G_size; j++)
-    {
-        if (uG[j][0] != 0 || uG[j][1] != 0)
-        {
-            G.push_back(std::vector<double>({uG[j][0], uG[j][1]}));
-        }
-    }
-    G_size = G.size();
-    // Boundary of { c + sum s_i*G_i : s_i in [-1,1] } by the O(G_size log G_size)
-    // Minkowski walk: exactly 2*G_size vertices, already counter-clockwise.
-    // Replaces the 2^G_size vertex enumeration + convex hull.
+    // The error term each form accumulates, as an axis-aligned generator. It
+    // is part of the set, so leaving it out would draw less than the enclosure.
+    if (v[0].err() > 0.0)
+        G.push_back({v[0].err(), 0.0});
+    if (v[1].err() > 0.0)
+        G.push_back({0.0, v[1].err()});
+    // Boundary of { c + sum s_i*G_i : s_i in [-1,1] } by the O(m log m)
+    // Minkowski walk: exactly 2*m vertices, already counter-clockwise.
+    // Replaces the 2^m vertex enumeration + convex hull.
 
     // Fold every generator into the upper half-plane [0,pi); the zonotope is
     // symmetric about c, so flipping a generator leaves the set unchanged.
     std::vector<std::vector<double>> g;
     for (const auto &e : G)
     {
+        if (e[0] == 0 && e[1] == 0)
+            continue;
         if (e[1] < 0 || (e[1] == 0 && e[0] < 0))
             g.push_back({-e[0], -e[1]});
         else
             g.push_back({e[0], e[1]});
     }
-    // Sort by angle: within [0,pi) a positive cross product means smaller angle.
-    std::sort(g.begin(), g.end(), [](const std::vector<double> &a, const std::vector<double> &b)
-              { return a[0] * b[1] - a[1] * b[0] > 0; });
+    // Sort by angle. Each generator gets a number computed once and the sort
+    // compares numbers: comparing two generators by the sign of their cross
+    // product can be intransitive in rounding on nearly parallel ones, which
+    // std::sort does not tolerate. Over the half-plane above, x / (|x| + y)
+    // decreases from 1 to -1 as the angle goes from 0 to pi.
+    std::vector<std::pair<double, std::vector<double>>> keyed;
+    for (const auto &e : g)
+        keyed.push_back(std::make_pair(e[0] / (std::fabs(e[0]) + e[1]), e));
+    std::sort(keyed.begin(), keyed.end(),
+              [](const std::pair<double, std::vector<double>> &a, const std::pair<double, std::vector<double>> &b)
+              { return a.first > b.first; });
+    for (size_t i = 0; i < g.size(); i++)
+        g[i] = keyed[i].second;
 
     // Start at the bottom vertex c - sum(g), then trace both point-symmetric halves.
     std::vector<double> X({}), Y({});
@@ -122,7 +140,13 @@ int main()
                                            SymEngine::Expression(1) / SymEngine::Expression(1),
                                            SymEngine::Expression(1) / SymEngine::Expression(1)});
 
-    ibex::AF_fAFFullI::setAffineNoiseNumber(10); // need to be lower than 15 because in 2D, the worth case involving two affine forms with 15 independant affine noises will generate 30 generator vectors and then 2^30 vertices -> close to the signed int (required by qHull) numerical limit
+    // An affine form keeps this many noise symbols and merges the smallest
+    // ones into its error term beyond that, so this is what decides how much
+    // of the shape of a control zonotope survives the evaluation. One symbol
+    // per control point and per coordinate, plus room for the ones the
+    // evaluation introduces itself. The boundary walk below is linearithmic in
+    // the number of symbols, so raising it costs little.
+    sb2l::SB2::set_affine_noise_number(2 * nCP + 16);
     ibex::AF_fAFFullI::setAffineTolerance(2.5e-15);
 
     vibes::newFigure("BSPLINE");
@@ -294,10 +318,9 @@ int main()
         }
     }
     // Plot the basis using Vibes
-    vibes::selectFigure("BASIS");
     std::vector<std::vector<ibex::Interval>> idu = My_bspline.get_idu();
     std::vector<std::vector<std::vector<ibex::Interval>>> ieBf = My_bspline.get_ieBf();
-    vibes::newFigure("BASIS");
+    vibes::newFigure("BASIS"); // created before it is drawn into
     for (unsigned int s = 0; s < ieBf.size(); s++)
     {
         for (unsigned int i = 0; i < ieBf[s].size(); i++)

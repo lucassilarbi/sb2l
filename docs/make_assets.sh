@@ -56,8 +56,7 @@ for ps in R IR Z; do
         canvas "$TMP/m_${ps}_${cs}.ppm" "$TMP/m_${ps}_${cs}.png" 420
     done
 done
-montage -label 'u:%[label]' \
-    -background '#1a1a1c' -fill '#d0d0d0' -pointsize 20 -geometry +4+4 -tile 3x3 \
+montage -background '#1a1a1c' -fill '#d0d0d0' -pointsize 20 -geometry +4+4 -tile 3x3 \
     -label 'u in R,  P in R'   "$TMP/m_R_R.png"   -label 'u in R,  P in IR'  "$TMP/m_R_IR.png" \
     -label 'u in R,  P in Z'   "$TMP/m_R_Z.png"   -label 'u in IR, P in R'   "$TMP/m_IR_R.png" \
     -label 'u in IR, P in IR'  "$TMP/m_IR_IR.png" -label 'u in IR, P in Z'   "$TMP/m_IR_Z.png" \
@@ -78,8 +77,16 @@ for f in "$TMP"/f0*.ppm; do convert "$f" -resize 760x "${f%.ppm}.png"; done
 # thing then differ everywhere, which is exactly what the optimisation below
 # looks for. Keeping the table fixed and the colours clean divides the size of
 # the animation by more than two.
-convert "$TMP"/f0000.png "$TMP"/f0200.png "$TMP"/f0350.png "$TMP"/f0500.png "$TMP"/f0640.png \
-    +append -dither None -colors 160 "$TMP/palette.gif"
+# The images the table is taken from are picked from the ones actually
+# produced, spread evenly over the tour: the number of images comes from the
+# rate and the stage durations written in gui/main.cpp, and naming them here
+# would break every time one of those changes.
+mapfile -t FRAMES < <(ls "$TMP"/f0*.png)
+PALETTE_SRC=()
+for k in 0 1 2 3 4; do
+    PALETTE_SRC+=("${FRAMES[$(( k * (${#FRAMES[@]} - 1) / 4 ))]}")
+done
+convert "${PALETTE_SRC[@]}" +append -dither None -colors 160 "$TMP/palette.gif"
 convert -delay 2 -loop 0 "$TMP"/f0*.png -dither None -remap "$TMP/palette.gif" "$TMP/raw.gif"
 gifsicle --optimize=3 --lossy=30 "$TMP/raw.gif" > "$OUT/tour.gif"
 

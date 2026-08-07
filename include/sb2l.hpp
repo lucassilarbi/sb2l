@@ -13,6 +13,7 @@
 #include <symengine/expression.h>
 #include <ibex/ibex.h>
 #include <memory>
+#include <ostream>
 #include <utility>
 #include <vector>
 
@@ -81,6 +82,9 @@ class SB2
      * @param t Taylor order, only used when f is Form::TAYLOR. -1 selects it
      *          automatically (p-1, capped at 11 by the factorial). Any other
      *          negative value is rejected; values above 11 are capped.
+     * @param W rational weights, one per control point. They only mean
+     *          something for a rational curve type, so passing them to a
+     *          non-rational one is rejected rather than silently ignored.
      * Every argument is validated: an out-of-range one raises std::runtime_error
      * rather than leaving the object in an undefined state.
      */
@@ -191,10 +195,19 @@ class SB2
     const SymEngine::Expression u_ = SymEngine::Expression("u"); // Symbolic B-spline parameter
     std::vector<std::vector<std::vector<SymEngine::Expression>>> N_; // B-spline basis functions arranged by segment
     std::vector<std::vector<std::vector<std::shared_ptr<ibex::Function>>>> iN_; // interval B-spline basis functions arranged by segment
-    std::vector<std::vector<ibex::Interval>> rdu_; // real decomposition of the parameter arranged by segment (used interval for numerical guarantee)
+    // Real decomposition of the parameter arranged by segment. Each value is
+    // carried as the interval of the two floating-point numbers around it, so
+    // that the rounding of the subdivision itself is visible while the basis
+    // is evaluated; only its midpoint is kept in reBf_ below.
+    std::vector<std::vector<ibex::Interval>> rdu_;
     std::vector<std::vector<ibex::Interval>> idu_; // interval decomposition of the parameter arranged by segment
     std::vector<std::vector<ibex::Affine2>> adu_; // affine decomposition of the parameter arranged by segment
-    std::vector<std::vector<std::vector<double>>> reBf_; // real evaluation of Basis functions arranged by segment (used interval for numerical guarantee)
+    // Real evaluation of the basis functions arranged by segment. The
+    // evaluation runs in interval arithmetic and its midpoint is taken, so
+    // these are ordinary rounded numbers: a real parameter is a point, and
+    // nothing here encloses anything. The enclosure comes from the control
+    // points alone when they are sets.
+    std::vector<std::vector<std::vector<double>>> reBf_;
     std::vector<std::vector<std::vector<ibex::Interval>>> ieBf_; // interval evaluation of Basis functions arranged by segment
     std::vector<std::vector<std::vector<ibex::Affine2>>> aeBf_; // affine evaluation of Basis functions arranged by segment
 
@@ -207,9 +220,11 @@ class SB2
      */
     void compute_N_();
     /**
-     * @brief compute the hroner form of a given SymEngine Expression
+     * @brief compute the horner form of a given SymEngine Expression.
+     * degree is the degree of the polynomial: it is the number of coefficients
+     * the form is built from, so it must not be below the true degree.
      */
-    void compute_horner(SymEngine::Expression& expr);
+    void compute_horner(SymEngine::Expression& expr, const int degree);
     /**
      * @brief compute iN_
      */

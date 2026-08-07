@@ -10,6 +10,9 @@
 #include <sb2l.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <stdexcept>
+#include <string>
 
 // When the parameter is affine and the control points are boxes, evaluate the
 // whole linear combination in affine arithmetic and take the hull of the
@@ -74,9 +77,11 @@ SB2::SB2(const int p,
                 W_.push_back(SymEngine::Expression(1));
             }
         }
-        else if (W_.size() != n_ + 1)
-            throw std::runtime_error("The chosen rational weight vector is wrong");
+        else if ((int)W_.size() != n_ + 1)
+            throw std::runtime_error("The rational weight vector must hold one weight per control point");
     }
+    else if (W_.size() != 0) // weights only mean something for a rational basis
+        throw std::runtime_error("Rational weights were given for a non-rational curve type");
     compute_U_();
     compute_N_();
     compute_iN_();
@@ -338,7 +343,7 @@ void SB2::compute_N_()
                 }
                 if (d == p_)
                 {
-                    compute_horner(N_[0][s][i]);
+                    compute_horner(N_[0][s][i], p_); // a basis function has the degree of the curve
                 }
             }
         }
@@ -352,7 +357,9 @@ void SB2::compute_N_()
             {
                 buffer[s] += expand(N_[0][s][i] * W_[i]);
             }
-            compute_horner(buffer[s]); // once the whole denominator is summed
+            // Once the whole denominator is summed. It is a combination of the
+            // basis functions, so it has their degree.
+            compute_horner(buffer[s], p_);
             for (int i = s; i < s + p_ + 1; i++)
             {
                 N_[0][s][i] = N_[0][s][i] * W_[i] / buffer[s];
@@ -368,59 +375,51 @@ void SB2::compute_N_()
                 for (int i = s; i < s + p_ + 1; i++)
                 {
                     N_[t][s][i] = (N_[t - 1][s][i].diff(u_));
+                    // Differentiating a polynomial lowers its degree, so the
+                    // Horner form only needs that many coefficients.
                     if (ct_ == CurveType::UNIFORM_NONRATIONAL || ct_ == CurveType::CLAMPED_NONRATIONAL)
-                        compute_horner(N_[t][s][i]);
+                        compute_horner(N_[t][s][i], p_ - t);
                 }
             }
         }
     }
 }
-void SB2::compute_horner(SymEngine::Expression &expr)
+void SB2::compute_horner(SymEngine::Expression &expr, const int degree)
 {
+    const int deg = std::max(degree, 0);
     std::vector<SymEngine::Expression> Coefficients;
     Coefficients.push_back(expr.subs({{u_, SymEngine::Expression(0)}}));
     expr = expr.diff(u_);
-    for (int i = 1; i < p_ + 1; i++)
+    for (int i = 1; i < deg + 1; i++)
     {
         Coefficients.push_back(expr.subs({{u_, SymEngine::Expression(0)}}) / SymEngine::factorial(i));
         expr = expr.diff(u_);
     }
     expr = (Coefficients[Coefficients.size() - 1]);
-    for (int i = 2; i < p_ + 2; i++)
+    for (int i = 2; i < deg + 2; i++)
     {
         expr = Coefficients[Coefficients.size() - i] + u_ * expr;
     }
 }
 void SB2::compute_iN_()
 {
-    ibex::Variable u("u");
-    iN_ = {{}};
-    for (int s = 0; s < nS_; s++)
+    // Only the p+1 basis functions of the support of a segment are non-zero;
+    // the rows are kept at their full width so that a function is still read
+    // at its control point index, but the entries outside the support stay
+    // empty instead of parsing an expression which is zero. On a curve with
+    // many control points, that is the bulk of the construction.
+    auto to_ibex = [](std::string expr) { for(size_t pos=0; (pos=expr.find("**",pos))!=std::string::npos; expr.replace(pos,2,"^"), ++pos); return expr; };
+    const int nT = (f_ == Form::TAYLOR) ? t_ + 1 : 0;
+    iN_.assign(nT + 1, std::vector<std::vector<std::shared_ptr<ibex::Function>>>(
+                           nS_, std::vector<std::shared_ptr<ibex::Function>>(n_ + 1)));
+    for (int t = 0; t <= nT; t++)
     {
-        iN_[0].push_back({});
-        for (int i = 0; i < n_ + 1; i++)
+        for (int s = 0; s < nS_; s++)
         {
-            iN_[0][s].push_back(std::make_shared<ibex::Function>(
-                "u", ([](std::string expr)
-                      { for(size_t pos=0; (pos=expr.find("**",pos))!=std::string::npos; expr.replace(pos,2,"^"), ++pos); return expr; }(N_[0][s][i].get_basic()->__str__()))
-                         .c_str()));
-        }
-    }
-    if (f_ == Form::TAYLOR)
-    {
-        for (int t = 1; t <= t_ + 1; t++)
-        {
-            iN_.push_back({});
-            for (int s = 0; s < nS_; s++)
+            for (int i = s; i < s + p_ + 1; i++)
             {
-                iN_[t].push_back({});
-                for (int i = 0; i < n_ + 1; i++)
-                {
-                    iN_[t][s].push_back(std::make_shared<ibex::Function>(
-                        "u", ([](std::string expr)
-                              { for(size_t pos=0; (pos=expr.find("**",pos))!=std::string::npos; expr.replace(pos,2,"^"), ++pos); return expr; }(N_[t][s][i].get_basic()->__str__()))
-                                 .c_str()));
-                }
+                iN_[t][s][i] = std::make_shared<ibex::Function>(
+                    "u", to_ibex(N_[t][s][i].get_basic()->__str__()).c_str());
             }
         }
     }

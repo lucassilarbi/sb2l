@@ -73,9 +73,13 @@ target_include_directories(sb2l
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/3rd/dynibex-2.3/include>
 )
 
+# The install interface is what the exported target carries to a consuming
+# project: without it, sb2l.hpp would only be found because the imported ibex
+# target happens to point at the same include root.
 target_include_directories(sb2l
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
 )
 
 target_link_libraries(sb2l PUBLIC ibex)
@@ -89,8 +93,9 @@ install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/3rd/dynibex-2.3/lib/ DESTINATION l
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/3rd/dynibex-2.3/share/ DESTINATION share)
 # install cmakes to give access to GMP
 install(
-    FILES ${CMAKE_CURRENT_BINARY_DIR}/3rd/symengine-0.14.0/cmake/LibFindMacros.cmake
-    FILES ${CMAKE_CURRENT_BINARY_DIR}/3rd/symengine-0.14.0/cmake/FindGMP.cmake
+    FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/3rd/symengine-0.14.0/cmake/LibFindMacros.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/3rd/symengine-0.14.0/cmake/FindGMP.cmake
     DESTINATION lib/cmake/sb2l)
 
 # Interactive ImGui editor (off by default; needs GLFW + OpenGL).

@@ -4,8 +4,10 @@
  *
  * The projection is orthographic, on purpose: the linear map "world -> screen
  * plane" then sends a zonotope to an exact 2D zonotope (project the center and
- * each generator, run the O(m log m) walk of zonotope2d.hpp), so the rendered
- * silhouettes stay guaranteed enclosures -- no perspective would allow that.
+ * each generator, run the O(m log m) walk of zonotope2d.hpp), so the outline
+ * drawn is the exact silhouette of the set -- no perspective would allow that.
+ * What reaches the screen is that silhouette rounded to the pixel grid, the
+ * vertices closer than half a pixel being dropped along the way.
  */
 #ifndef SB2L_GUI_CAMERA3D_HPP_
 #define SB2L_GUI_CAMERA3D_HPP_
