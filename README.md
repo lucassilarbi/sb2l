@@ -91,7 +91,7 @@ Tested on Ubuntu 22.04.
 
 ```bash
 sudo apt-get install cmake libgmp-dev python3 flex bison gcc g++ make \
-                     pkg-config libfuse2 libqhull-dev
+                     pkg-config libfuse2
 sudo apt-get install libglfw3-dev libgl1-mesa-dev    # editor only
 
 git submodule update --init --recursive
@@ -104,9 +104,14 @@ sudo make install
 `SymEngine` is a submodule; `DynIbex` and `Dear ImGui` are provided under `3rd/`. The option
 `-DSB2L_BUILD_GUI=ON` adds the editor, which requires GLFW and OpenGL.
 
-Interval and affine arithmetic must be compiled with `-frounding-math`, and the files which
-use it directly are compiled without optimisation: above `-O0`, the compiler transforms
-that arithmetic and the guarantees are lost. The rest of the library is optimised.
+Every file which computes in interval or affine arithmetic is compiled with
+`-frounding-math`, so that the compiler does not fold constants under a rounding mode
+which is not the one set at run time, and with `-ffp-contract=off`, so that it does not
+fuse a product and a sum into one operation whose intermediate result would escape the
+directed rounding. Both are requirements of the arithmetic, not choices of speed, and the
+whole library is compiled optimised. `-march=native` is available as
+`-DSB2L_NATIVE_ARCH=ON`; it is off by default because it makes the binary unusable on an
+older machine.
 
 ## Use
 
@@ -147,7 +152,18 @@ dimension.
 
 The three evaluations share the same basis, so they may be called on the same object:
 `eval_point` for real-valued control points, `eval_box` for boxes, `eval_zonotope` for
-zonotopes.
+zonotopes. Only the last two enclose the curve. `eval_point` returns one point per
+subdivision, taken from the middle of the basis, which is the curve itself when the
+parameter is real and a representative of the element otherwise.
+
+An affine form keeps a bounded number of noise symbols, ten by default, and merges the
+smallest ones into its error term beyond that. Control zonotopes built from more
+generators are therefore reduced unless `SB2::set_affine_noise_number` raises the
+number first.
+
+Every argument of the constructor is checked, and so is the shape of the control points:
+an out-of-range degree, number of subdivisions or Taylor order, a missing coordinate or
+two coordinates of different lengths all raise `std::runtime_error`.
 
 A control point contributes to at most `p + 1` segments, the local support of its basis
 function. When only one control point has changed, `impacted_segments(i)` gives that range
@@ -228,7 +244,7 @@ Every figure of this file is produced by the editor itself:
 ## Examples
 
 ```bash
-cd examples && mkdir build && cd build
+cd examples && mkdir -p build && cd build
 cmake .. && make
 ./basic_example
 ```
