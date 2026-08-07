@@ -78,6 +78,18 @@ public:
     // real control points with an interval parameter give the tube of the curve.
     sb2l::ParameterSet cs = sb2l::ParameterSet::IR;
 
+    // The set the *result* elements live in. Real control points are degenerate
+    // sets (zero-width intervals, constant affine forms), so what the result is
+    // made of follows the parameter: real control points over an interval
+    // parameter are boxes enclosing the curve, over an affine parameter
+    // zonotopes, and only the real-real pair evaluates to the list of points.
+    // eval_point would collapse the basis to its midpoint and draw a curve that
+    // encloses nothing, so it is reserved for that last pair.
+    sb2l::ParameterSet effective_cs() const
+    {
+        return cs == sb2l::ParameterSet::R ? ps : cs;
+    }
+
     // Spatial dimension of the curve: 2 or 3. SB2 takes it as the number of
     // coordinate rows, so switching costs a reeval(), never a rebuild().
     int dim = 2;
@@ -88,10 +100,10 @@ public:
     // Segment s owns a fixed slice of each container: the d elements at [s*d, s*d + d),
     // which is what lets a segment be redrawn in place (an R *parameter* evaluates one
     // extra element at the very end, closing the curve, hence the trailing slot).
-    std::vector<std::vector<Vec3>> polylines;  // cs = R: the curve, as a single polyline
-    std::vector<Box> boxes;                    // cs = IR: result boxes
-    std::vector<std::vector<Vec2>> zonos;      // cs = Z, dim 2: result zonotope polygons
-    std::vector<Zono3> zonos3;                 // cs = Z, dim 3: center + generators
+    std::vector<std::vector<Vec3>> polylines;  // R over R: the evaluated points
+    std::vector<Box> boxes;                    // effective IR: result boxes
+    std::vector<std::vector<Vec2>> zonos;      // effective Z, dim 2: result zonotope polygons
+    std::vector<Zono3> zonos3;                 // effective Z, dim 3: center + generators
 
     std::string status;                        // last rebuild/eval message
     bool dirty_structural = true;
@@ -125,7 +137,9 @@ private:
     void seed_default_scene();    // dim-aware: sine wave in 2D, helix in 3D
 
     // Control points of the current scene, in the layout expected by SB2::eval_*:
-    // one row per coordinate, dim rows in all.
+    // one row per coordinate, dim rows in all. When the control points are real
+    // (cs == R), the IR and Z layouts carry them as degenerate sets, which is
+    // how the parameter enclosure alone reaches the result.
     std::vector<std::vector<double>> control_points_R() const;
     std::vector<ibex::IntervalVector> control_points_IR() const;
     std::vector<ibex::Affine2Vector> control_points_Z() const;

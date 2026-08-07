@@ -404,14 +404,12 @@ void Editor::draw_scene(ImDrawList* dl) const
         dl->AddPolyline(poly.data(), (int)poly.size(), col_ctrl, 0, 1.0f);
     }
 
-    // Result geometry.
-    for (const std::vector<Vec3>& line : a.polylines) {
-        if (line.size() < 2) continue;
-        std::vector<ImVec2> pts;
-        pts.reserve(line.size());
-        for (const Vec3& q : line) pts.push_back(canvas_.to_screen(q.x, q.y));
-        dl->AddPolyline(pts.data(), (int)pts.size(), col_curve, 0, 2.0f);
-    }
+    // Result geometry. The real-real pair is a discretization: the result is
+    // the list of evaluated points, drawn as such -- nothing encloses the
+    // curve between two samples, so no line joins them.
+    for (const std::vector<Vec3>& line : a.polylines)
+        for (const Vec3& q : line)
+            dl->AddCircleFilled(canvas_.to_screen(q.x, q.y), 2.5f, col_curve);
     for (const Box& b : a.boxes) {
         ImVec2 p0 = canvas_.to_screen(b.x0, b.y1); // top-left in screen
         ImVec2 p1 = canvas_.to_screen(b.x1, b.y0);
@@ -698,14 +696,11 @@ void Editor::draw_scene3(ImDrawList* dl) const
         }
     }
 
-    // The center curve (cs = R), on top of the fills.
-    for (const std::vector<Vec3>& line : a.polylines) {
-        if (line.size() < 2) continue;
-        std::vector<ImVec2> pts;
-        pts.reserve(line.size());
-        for (const Vec3& q : line) pts.push_back(cam_.to_screen(q));
-        dl->AddPolyline(pts.data(), (int)pts.size(), col_curve, 0, 2.0f);
-    }
+    // The evaluated points of the real-real pair, on top of the fills (a
+    // discretization: no line joins two samples).
+    for (const std::vector<Vec3>& line : a.polylines)
+        for (const Vec3& q : line)
+            dl->AddCircleFilled(cam_.to_screen(q), 2.5f, col_curve);
 
     // Control-point handles (on top).
     for (const ControlPoint& c : a.cps) {
