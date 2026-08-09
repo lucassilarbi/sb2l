@@ -92,7 +92,7 @@ Tested on Ubuntu 22.04.
 ```bash
 sudo apt-get install git cmake libgmp-dev python3 flex bison gcc g++ make \
                      pkg-config libfuse2
-sudo apt-get install libglfw3-dev libgl1-mesa-dev    # editor only
+sudo apt-get install libglfw3-dev libgl1-mesa-dev    # GUI only
 
 git submodule update --init --recursive
 mkdir build && cd build
@@ -102,7 +102,7 @@ sudo make install
 ```
 
 `SymEngine` is a submodule; `DynIbex` and `Dear ImGui` are provided under `3rd/`. The option
-`-DSB2L_BUILD_GUI=ON` adds the editor, which requires GLFW and OpenGL.
+`-DSB2L_BUILD_GUI=ON` adds the GUI, which requires GLFW and OpenGL.
 
 Every file which computes in interval or affine arithmetic is compiled with
 `-frounding-math`, so that the compiler does not fold constants under a rounding mode
@@ -207,14 +207,15 @@ the parameter or from the control points, widens the enclosure by about one orde
 magnitude; refining the subdivisions does not reduce it. Rational B-splines are therefore
 best evaluated over a real parameter and real-valued control points.
 
-## Interactive editor
+## Interactive GUI
 
 ```bash
+mkdir build && cd build
 cmake -DSB2L_BUILD_GUI=ON .. && make sb2l_gui -j
 ./gui/sb2l_gui
 ```
 
-<img src="docs/img/gui_2d.png" width="900" alt="the editor in two dimensions">
+<img src="docs/img/gui_2d.png" width="900" alt="the GUI in two dimensions">
 
 The degree, the number of control points, the knot vector, the evaluation form and the two
 sets are chosen in the panel on the left. A control point is edited directly: a point is
@@ -228,7 +229,7 @@ The `dimension` list moves the curve from the plane to space. The dimension is t
 of containers of control points and the basis does not depend on it, so the change costs
 one evaluation.
 
-<img src="docs/img/gui_3d.png" width="900" alt="the editor in three dimensions">
+<img src="docs/img/gui_3d.png" width="900" alt="the GUI in three dimensions">
 
 The view turns when empty space is dragged, and moves when the drag is combined with the
 shift key or the right button. A control point which is dragged moves in the plane of the
@@ -236,7 +237,7 @@ view passing through it, so the view has to be turned to reach the third directi
 offers its eight corners, and the end of a generator may be placed anywhere in space.
 
 A zonotope built from `m` generators is contained in a subspace of dimension `m`: two
-generators give a set contained in a plane. The editor therefore uses at least three
+generators give a set contained in a plane. The GUI therefore uses at least three
 generators in space.
 
 <img src="docs/img/zonotopes_3d.png" width="820" alt="zonotopes in space">
@@ -250,7 +251,7 @@ projection of a zonotope is again a zonotope, whose boundary is calculated from 
 projected generators. And the boundary of a control zonotope in space is calculated
 directly from its pairs of generators, without the convex hull of its vertices.
 
-Every figure of this file is produced by the editor itself, which the script
+Every figure of this file is produced by the GUI itself, which the script
 below drives; it also needs ImageMagick and gifsicle to assemble them.
 
 ```bash
@@ -274,7 +275,7 @@ Start `VIBes-viewer/VIBes-0.2.3-linux.AppImage` before running them.
 The construction, its properties and its evaluation are presented in
 
 > **Set-Based B-Splines with Boxes, Zonotopes and Polytopes.**
-> Electronic copy available at <https://ssrn.com/abstract=7226315>
+> <https://ssrn.com/abstract=7226315>
 
 SB2L is the library provided with that paper, which should be consulted for everything
 this file does not cover.
@@ -289,5 +290,5 @@ The implementation relies on symbolic computation using the
 [SymEngine](https://github.com/symengine/symengine) C++ library. Guaranteed floating-point
 arithmetic for intervals and zonotopes is provided through the
 [DynIbex](https://perso.ensta-paris.fr/~chapoutot/dynibex/) C++ library. The plots of the
-examples use [VIBes](https://github.com/ENSTABretagneRobotics/VIBES), and the editor uses
+examples use [VIBes](https://github.com/ENSTABretagneRobotics/VIBES), and the GUI uses
 [Dear ImGui](https://github.com/ocornut/imgui).
