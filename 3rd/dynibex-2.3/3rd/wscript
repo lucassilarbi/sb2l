@@ -375,7 +375,7 @@ def configure (conf):
 			
 		elif with_clp is not None :
 			
-			if ((conf.env["INTERVAL_LIB"] is "GAOL") and (conf.env.DEST_CPU == "x86_64")):
+			if ((conf.env["INTERVAL_LIB"] == "GAOL") and (conf.env.DEST_CPU == "x86_64")):
 				conf.fatal ("cannot use the Clp linear solver with Gaol on x86_64 processor, please install Soplex or Cplex, or use another Interval library (Filib or Profil/Bias).")
 				
 			# build with Clp
@@ -969,7 +969,7 @@ def build (bld):
 		path = bld.path.find_dir (bld.env.AMPL).abspath()
 
 		with subdir (path):
-			if  (bld.env["INTERVAL_LIB"] is "GAOL") :
+			if  (bld.env["INTERVAL_LIB"] == "GAOL") :
 				cmd = ["clean"] if bld.cmd in ("clean", "uninstall") else ["CFLAGS=-DNo_dtoa -m32"]
 			else:
 				cmd = ["clean"] if bld.cmd in ("clean", "uninstall") else []
