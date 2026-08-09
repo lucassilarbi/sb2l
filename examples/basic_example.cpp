@@ -8,12 +8,16 @@
  */
 
 #include <sb2l.hpp>
-#include <libqhullcpp/Qhull.h>
 #include "vibes.h"
+
+#include <iostream>
+#include <vector>
 
 int main()
 {
-    // Parameters
+    // Parameters. The curve is non-rational, so it takes no weight: the
+    // rational basis, and the weights that go with it, are in the advanced
+    // example.
     int p(3);
     int nCP(5);
     sb2l::CurveType ct = sb2l::CurveType::UNIFORM_NONRATIONAL;
@@ -21,11 +25,6 @@ int main()
     sb2l::ParameterSet ps = sb2l::ParameterSet::IR;
     int d(100);
     int t(1); // -1: Automatic
-    std::vector<SymEngine::Expression> rw({SymEngine::Expression(1) / SymEngine::Expression(1),
-                                           SymEngine::Expression(1) / SymEngine::Expression(1),
-                                           SymEngine::Expression(1) / SymEngine::Expression(1),
-                                           SymEngine::Expression(1) / SymEngine::Expression(1),
-                                           SymEngine::Expression(1) / SymEngine::Expression(1)});
 
     vibes::newFigure("BSPLINE");
 
@@ -62,18 +61,9 @@ int main()
             std::cout << "  - Taylor order: " << t << std::endl;
         }
     }
-    std::cout << "  - Rational weight vector: [";
-    for (size_t i = 0; i < rw.size(); i++)
-    {
-        if (i != rw.size() - 1)
-            std::cout << rw[i] << ", ";
-        else
-            std::cout << rw[i] << "]";
-    }
-    std::cout << "" << "" << std::endl;
 
     // B-spline generation
-    sb2l::SB2 My_bspline(p, nCP, ct, f, ps, d, t, rw);
+    sb2l::SB2 My_bspline(p, nCP, ct, f, ps, d, t);
 
     // Eval boxes
     std::vector<std::vector<ibex::IntervalVector>> boxes = My_bspline.eval_box(P);
@@ -87,10 +77,9 @@ int main()
         }
     }
     // Plot the basis using Vibes
-    vibes::selectFigure("BASIS");
     std::vector<std::vector<ibex::Interval>> idu = My_bspline.get_idu();
     std::vector<std::vector<std::vector<ibex::Interval>>> ieBf = My_bspline.get_ieBf();
-    vibes::newFigure("BASIS");
+    vibes::newFigure("BASIS"); // created before it is drawn into
     for (unsigned int s = 0; s < ieBf.size(); s++)
     {
         for (unsigned int i = 0; i < ieBf[s].size(); i++)

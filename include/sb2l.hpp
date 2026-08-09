@@ -13,6 +13,7 @@
 #include <symengine/expression.h>
 #include <ibex/ibex.h>
 #include <memory>
+#include <ostream>
 #include <utility>
 #include <vector>
 
@@ -25,9 +26,9 @@ namespace sb2l {
  * RATIONAL : The basis is rational. Each control point is link to a dedicated weight
  */
 enum class CurveType{UNIFORM_RATIONAL, UNIFORM_NONRATIONAL, CLAMPED_RATIONAL, CLAMPED_NONRATIONAL};
-inline std::ostream& operator<<(std::ostream& os, CurveType ct) 
+inline std::ostream& operator<<(std::ostream& os, CurveType ct)
 {
-    switch (ct) 
+    switch (ct)
     {
         case CurveType::UNIFORM_RATIONAL: return os << "UNIFORM_RATIONAL";
         case CurveType::UNIFORM_NONRATIONAL: return os << "UNIFORM_NONRATIONAL";
@@ -42,9 +43,9 @@ inline std::ostream& operator<<(std::ostream& os, CurveType ct)
  * TAYLOR : Taylor form using extended usual operators from R, the talyor order need to be set
  */
 enum class Form{NATURAL, TAYLOR};
-inline std::ostream& operator<<(std::ostream& os, Form f) 
+inline std::ostream& operator<<(std::ostream& os, Form f)
 {
-    switch (f) 
+    switch (f)
     {
         case Form::NATURAL: return os << "NATURAL";
         case Form::TAYLOR: return os << "TAYLOR";
@@ -58,9 +59,9 @@ inline std::ostream& operator<<(std::ostream& os, Form f)
  * Z : Zonotopes
  */
 enum class ParameterSet{R, IR, Z};
-inline std::ostream& operator<<(std::ostream& os, ParameterSet ps) 
+inline std::ostream& operator<<(std::ostream& os, ParameterSet ps)
 {
-    switch (ps) 
+    switch (ps)
     {
         case ParameterSet::R: return os << "R";
         case ParameterSet::IR: return os << "IR";
@@ -69,59 +70,130 @@ inline std::ostream& operator<<(std::ostream& os, ParameterSet ps)
     }
 }
 
+/**
+ * \brief the center and the generators of the zonotope an affine vector
+ * stands for: { c + sum_k s_k g_k : s_k in [-1, 1] }.
+ */
+struct Zonotope
+{
+    int dim = 0;                    // number of coordinates
+    int m = 0;                      // number of generators
+    std::vector<double> center;     // dim entries
+    std::vector<double> generators; // dim * m entries, generator k first
+    /**
+     * @brief coordinate i of the generator k
+     */
+    double gen(const int k, const int i) const { return generators[(size_t)k * dim + i]; }
+};
+
+/**
+ * @brief read an element returned by eval_zonotope or update_zonotope.
+ *
+ * Read it through this and never through Affine2::size() and Affine2::val(i):
+ * outside of the interval library those two do not give what their names
+ * suggest. size() gives the number of coordinates of the form, not the number
+ * of its noise terms, and the terms are numbered by a counter shared by every
+ * affine operation of the process, so their numbers are arbitrary. A loop over
+ * 1 to size() calling val(i) therefore finds almost nothing and the set read
+ * back is smaller than the element, which is the one mistake this arithmetic
+ * cannot afford.
+ *
+ * The error term each coordinate carries is returned as one more generator,
+ * along its own axis, so that the zonotope described is the whole element.
+ * Calling Affine2Vector::compact() on the element first keeps the list of
+ * generators short.
+ */
+Zonotope zonotope_of(const ibex::Affine2Vector &v);
+
 class SB2
 {
     public:
 
     /**
      * @brief Constructor
+     * @param p degree of the curve, p >= 1 (p >= 0 is accepted but gives a constant basis)
+     * @param nCP number of control points, nCP > p
+     * @param d number of parameter subdivisions per segment, d >= 1
+     * @param t Taylor order, only used when f is Form::TAYLOR. -1 selects it
+     *          automatically (p-1, capped at 11 by the factorial). Any other
+     *          negative value is rejected; values above 11 are capped.
+     * @param W rational weights, one per control point. They only mean
+     *          something for a rational curve type, so passing them to a
+     *          non-rational one is rejected rather than silently ignored.
+     * Every argument is validated: an out-of-range one raises std::runtime_error
+     * rather than leaving the object in an undefined state.
      */
     SB2(const int p = 3,
          const int nCP = 5,
          const CurveType ct = CurveType::UNIFORM_NONRATIONAL,
          const Form f = Form::TAYLOR,
          const ParameterSet ps = ParameterSet::IR,
-         const int d = 10, 
+         const int d = 10,
          const int t=-1,
          const std::vector<SymEngine::Expression> W=std::vector<SymEngine::Expression>({})
         );
     /**
+     * @brief number of noise symbols an affine form keeps before the smallest
+     * ones are merged into its error term. This is process-wide state of the
+     * affine arithmetic, not a property of one B-spline; the default of the
+     * underlying library is 10, which silently reduces the order of any
+     * zonotope built from more than 10 generators. Raise it before building
+     * control zonotopes if their exact shape matters.
+     */
+    static void set_affine_noise_number(const unsigned int n);
+    static unsigned int get_affine_noise_number();
+    /**
      * @brief get p_
      */
-    int get_p();
+    int get_p() const;
     /**
      * @brief get n_
      */
-    int get_n();
+    int get_n() const;
     /**
      * @brief get nS_
      */
-    int get_nS();
+    int get_nS() const;
     /**
      * @brief get d_
      */
-    int get_d();
+    int get_d() const;
     /**
-     * @brief get basis
+     * @brief get basis. The basis is returned in the arithmetic asked for,
+     * converted from the one it was built in when they differ (an interval
+     * basis is the hull of an affine one, a real basis its midpoint); the
+     * conversions that lose the enclosure, from a poorer to a richer
+     * arithmetic, raise std::runtime_error. These getters do not modify the
+     * B-spline.
      */
-    std::vector<std::vector<std::vector<double>>> get_reBf();
-    std::vector<std::vector<std::vector<ibex::Interval>>> get_ieBf();
-    std::vector<std::vector<std::vector<ibex::Affine2>>> get_aeBf();
+    std::vector<std::vector<std::vector<double>>> get_reBf() const;
+    std::vector<std::vector<std::vector<ibex::Interval>>> get_ieBf() const;
+    std::vector<std::vector<std::vector<ibex::Affine2>>> get_aeBf() const;
     /**
      * @brief evaluate the order-th derivative of the basis functions, using the same form as the basis
      */
-    std::vector<std::vector<std::vector<double>>> get_reBf_diff(const int order);
-    std::vector<std::vector<std::vector<ibex::Interval>>> get_ieBf_diff(const int order);
-    std::vector<std::vector<std::vector<ibex::Affine2>>> get_aeBf_diff(const int order);
+    std::vector<std::vector<std::vector<double>>> get_reBf_diff(const int order) const;
+    std::vector<std::vector<std::vector<ibex::Interval>>> get_ieBf_diff(const int order) const;
+    std::vector<std::vector<std::vector<ibex::Affine2>>> get_aeBf_diff(const int order) const;
     /**
-     * @brief get idu_
+     * @brief get the subdivisions of the parameter, in the arithmetic asked
+     * for, under the same conversion rules as the basis getters above.
      */
-    std::vector<std::vector<ibex::Interval>> get_rdu();
-    std::vector<std::vector<ibex::Interval>> get_idu();
-    std::vector<std::vector<ibex::Affine2>> get_adu();
+    std::vector<std::vector<ibex::Interval>> get_rdu() const;
+    std::vector<std::vector<ibex::Interval>> get_idu() const;
+    std::vector<std::vector<ibex::Affine2>> get_adu() const;
     /**
      * @brief evaluate the B-spline. Takes a list of control points as input and return the list corresponding elements.
-     * The resulted elements are arranged by segment
+     * The resulted elements are arranged by segment: out[s][du] is the element
+     * of segment s on subdivision du. P holds one container per coordinate,
+     * all of the same size, at least n+1 entries each.
+     *
+     * eval_box and eval_zonotope enclose the curve. eval_point does not: it
+     * returns one point per subdivision, obtained from the midpoint of the
+     * basis, so it only coincides with the curve when the parameter set is
+     * ParameterSet::R. Over an interval or affine parameter it is a
+     * representative of the element, with no enclosure property; use
+     * eval_box or eval_zonotope when the guarantee is needed.
      */
     std::vector<std::vector<std::vector<double>>> eval_point(const std::vector<std::vector<double>> &P);
     std::vector<std::vector<ibex::IntervalVector>> eval_box(const std::vector<ibex::IntervalVector> &P);
@@ -158,10 +230,19 @@ class SB2
     const SymEngine::Expression u_ = SymEngine::Expression("u"); // Symbolic B-spline parameter
     std::vector<std::vector<std::vector<SymEngine::Expression>>> N_; // B-spline basis functions arranged by segment
     std::vector<std::vector<std::vector<std::shared_ptr<ibex::Function>>>> iN_; // interval B-spline basis functions arranged by segment
-    std::vector<std::vector<ibex::Interval>> rdu_; // real decomposition of the parameter arranged by segment (used interval for numerical guarantee)
+    // Real decomposition of the parameter arranged by segment. Each value is
+    // carried as the interval of the two floating-point numbers around it, so
+    // that the rounding of the subdivision itself is visible while the basis
+    // is evaluated; only its midpoint is kept in reBf_ below.
+    std::vector<std::vector<ibex::Interval>> rdu_;
     std::vector<std::vector<ibex::Interval>> idu_; // interval decomposition of the parameter arranged by segment
     std::vector<std::vector<ibex::Affine2>> adu_; // affine decomposition of the parameter arranged by segment
-    std::vector<std::vector<std::vector<double>>> reBf_; // real evaluation of Basis functions arranged by segment (used interval for numerical guarantee)
+    // Real evaluation of the basis functions arranged by segment. The
+    // evaluation runs in interval arithmetic and its midpoint is taken, so
+    // these are ordinary rounded numbers: a real parameter is a point, and
+    // nothing here encloses anything. The enclosure comes from the control
+    // points alone when they are sets.
+    std::vector<std::vector<std::vector<double>>> reBf_;
     std::vector<std::vector<std::vector<ibex::Interval>>> ieBf_; // interval evaluation of Basis functions arranged by segment
     std::vector<std::vector<std::vector<ibex::Affine2>>> aeBf_; // affine evaluation of Basis functions arranged by segment
 
@@ -174,9 +255,11 @@ class SB2
      */
     void compute_N_();
     /**
-     * @brief compute the hroner form of a given SymEngine Expression
+     * @brief compute the horner form of a given SymEngine Expression.
+     * degree is the degree of the polynomial: it is the number of coefficients
+     * the form is built from, so it must not be below the true degree.
      */
-    void compute_horner(SymEngine::Expression& expr);
+    void compute_horner(SymEngine::Expression& expr, const int degree);
     /**
      * @brief compute iN_
      */
@@ -190,7 +273,7 @@ class SB2
     /**
      * @brief compute ieBf_
      */
-    int factorial(int n); // numerically limited to n <= 12
+    static int factorial(int n); // numerically limited to n <= 12
     void compute_reBf();
     void compute_ieBf();
     void compute_aeBf();

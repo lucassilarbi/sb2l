@@ -1,0 +1,15 @@
+# The image builds the library from source in /root/sb2l/build. Anything a
+# local build left behind must stay out of the context: COPY would otherwise
+# bring a CMakeCache.txt naming a directory which does not exist in the image,
+# and cmake refuses to reuse a cache generated somewhere else. The build then
+# fails on a machine where the library was compiled first, which is what the
+# README tells the reader to do.
+build/
+examples/build/
+
+# .git is deliberately kept: the image runs `git submodule update --init` to
+# fetch SymEngine.
+
+# Editor and run-time leftovers.
+.vscode/
+imgui.ini

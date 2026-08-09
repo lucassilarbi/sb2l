@@ -10,64 +10,57 @@
 #include <sb2l.hpp>
 #include "vibes.h"
 
+#include <algorithm>
+#include <cmath>
+#include <iostream>
+#include <list>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
 std::pair<std::vector<double>, std::vector<double>> compute_zonotope2D(ibex::Affine2Vector &v) // compute the zonotope resulting from two affine forms
 {
-    v.compact();
-    int m(v.size()); // number of affine forms
-    if (m > 2)
-    {
-        throw std::runtime_error("The number of affine form can not exceed 2");
-        return std::pair<std::vector<double>, std::vector<double>>(std::vector<double>({}), std::vector<double>({}));
-    }
-    // compute the center points (also works for m>2)
-    std::vector<double> c(m, 0); // center points
-    for (int i = 0; i < m; i++)
-    {
-        c[i] = v[i].val(0);
-    }
-    // compute genrator vectors (also works for m>2)
-    int G_size(v[0].size());
-    for (int i = 1; i < m; i++)
-    {
-        if (v[i].size() > G_size)
-            G_size = v[i].size();
-    }
-    // std::vector<std::vector<double>> G(G_size, std::vector<double>(m, 0));
-    std::vector<std::vector<double>> uG(G_size, std::vector<double>(m, 0)); // uncompact generator vector
-    for (int i = 0; i < m; i++)
-    {
-        for (int j = 0; j < G_size; j++)
-        {
-            uG[j][i] = v[i].val(j + 1);
-        }
-    }
-    // compact the generator vector (from here on, the code only works in 2D)
-    std::vector<std::vector<double>> G({}); // compact generator vector
-    for (int j = 0; j < G_size; j++)
-    {
-        if (uG[j][0] != 0 || uG[j][1] != 0)
-        {
-            G.push_back(std::vector<double>({uG[j][0], uG[j][1]}));
-        }
-    }
-    G_size = G.size();
-    // Boundary of { c + sum s_i*G_i : s_i in [-1,1] } by the O(G_size log G_size)
-    // Minkowski walk: exactly 2*G_size vertices, already counter-clockwise.
-    // Replaces the 2^G_size vertex enumeration + convex hull.
+    v.compact(); // shortens the list of noise terms, nothing else
+    if (v.size() != 2)
+        throw std::runtime_error("The zonotope is drawn in the plane: exactly two affine forms are expected");
+    // The center and the generators of the element, read through the library:
+    // sb2l::zonotope_of is the one function which knows how a set comes out of
+    // an affine vector, and its documentation says why reading it by hand,
+    // through size() and val(i), loses the generators without a word.
+    const sb2l::Zonotope z = sb2l::zonotope_of(v);
+    const std::vector<double> c = z.center;
+    std::vector<std::vector<double>> G;
+    for (int k = 0; k < z.m; k++)
+        G.push_back({z.gen(k, 0), z.gen(k, 1)});
+    // Boundary of { c + sum s_i*G_i : s_i in [-1,1] } by the O(m log m)
+    // Minkowski walk: exactly 2*m vertices, already counter-clockwise.
+    // Replaces the 2^m vertex enumeration + convex hull.
 
     // Fold every generator into the upper half-plane [0,pi); the zonotope is
     // symmetric about c, so flipping a generator leaves the set unchanged.
     std::vector<std::vector<double>> g;
     for (const auto &e : G)
     {
+        if (e[0] == 0 && e[1] == 0)
+            continue;
         if (e[1] < 0 || (e[1] == 0 && e[0] < 0))
             g.push_back({-e[0], -e[1]});
         else
             g.push_back({e[0], e[1]});
     }
-    // Sort by angle: within [0,pi) a positive cross product means smaller angle.
-    std::sort(g.begin(), g.end(), [](const std::vector<double> &a, const std::vector<double> &b)
-              { return a[0] * b[1] - a[1] * b[0] > 0; });
+    // Sort by angle. Each generator gets a number computed once and the sort
+    // compares numbers: comparing two generators by the sign of their cross
+    // product can be intransitive in rounding on nearly parallel ones, which
+    // std::sort does not tolerate. Over the half-plane above, x / (|x| + y)
+    // decreases from 1 to -1 as the angle goes from 0 to pi.
+    std::vector<std::pair<double, std::vector<double>>> keyed;
+    for (const auto &e : g)
+        keyed.push_back(std::make_pair(e[0] / (std::fabs(e[0]) + e[1]), e));
+    std::sort(keyed.begin(), keyed.end(),
+              [](const std::pair<double, std::vector<double>> &a, const std::pair<double, std::vector<double>> &b)
+              { return a.first > b.first; });
+    for (size_t i = 0; i < g.size(); i++)
+        g[i] = keyed[i].second;
 
     // Start at the bottom vertex c - sum(g), then trace both point-symmetric halves.
     std::vector<double> X({}), Y({});
@@ -122,7 +115,13 @@ int main()
                                            SymEngine::Expression(1) / SymEngine::Expression(1),
                                            SymEngine::Expression(1) / SymEngine::Expression(1)});
 
-    ibex::AF_fAFFullI::setAffineNoiseNumber(10); // need to be lower than 15 because in 2D, the worth case involving two affine forms with 15 independant affine noises will generate 30 generator vectors and then 2^30 vertices -> close to the signed int (required by qHull) numerical limit
+    // An affine form keeps this many noise symbols and merges the smallest
+    // ones into its error term beyond that, so this is what decides how much
+    // of the shape of a control zonotope survives the evaluation. One symbol
+    // per control point and per coordinate, plus room for the ones the
+    // evaluation introduces itself. The boundary walk below is linearithmic in
+    // the number of symbols, so raising it costs little.
+    sb2l::SB2::set_affine_noise_number(2 * nCP + 16);
     ibex::AF_fAFFullI::setAffineTolerance(2.5e-15);
 
     vibes::newFigure("BSPLINE");
@@ -175,7 +174,7 @@ int main()
     //     vibes::drawPolygon(zonotope.first, zonotope.second, "grey[grey]");
     // }
     //================================================== CONTROL POINTS EXAMPLE 2 ==========================================================//
-    int reserved(2); // reserved allow us to reserve some epsilon for control points. for example, if reserved=2, each control points is suppose to be defind with at most 2 affine form. 
+    int reserved(2); // reserved allow us to reserve some epsilon for control points. for example, if reserved=2, each control points is suppose to be defind with at most 2 affine form.
                      // moreover, it is really important to correcly setup epsilon numbers (the first element of std::pair<int,double>(1, 0.5)) to be consistent with reserved.
     ibex::Affine2Vector aPx = ibex::Affine2Vector(12, ibex::Affine2(0.0));
     for(int i=0;i<reserved;i++) aPx[0]+=ibex::Affine2(ibex::Interval(-1,1));
@@ -294,10 +293,9 @@ int main()
         }
     }
     // Plot the basis using Vibes
-    vibes::selectFigure("BASIS");
     std::vector<std::vector<ibex::Interval>> idu = My_bspline.get_idu();
     std::vector<std::vector<std::vector<ibex::Interval>>> ieBf = My_bspline.get_ieBf();
-    vibes::newFigure("BASIS");
+    vibes::newFigure("BASIS"); // created before it is drawn into
     for (unsigned int s = 0; s < ieBf.size(); s++)
     {
         for (unsigned int i = 0; i < ieBf[s].size(); i++)
