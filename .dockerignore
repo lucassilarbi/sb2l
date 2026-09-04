@@ -8,7 +8,7 @@ build/
 examples/build/
 
 # .git is deliberately kept: the image runs `git submodule update --init` to
-# fetch SymEngine.
+# fetch SymEngine and Dear ImGui.
 
 # Editor and run-time leftovers.
 .vscode/

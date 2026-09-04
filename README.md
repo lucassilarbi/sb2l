@@ -101,7 +101,7 @@ make -j
 sudo make install
 ```
 
-`SymEngine` is a submodule; `DynIbex` and `Dear ImGui` are provided under `3rd/`. The option
+`SymEngine` and `Dear ImGui` are submodules; `DynIbex` is provided under `3rd/`. The option
 `-DSB2L_BUILD_GUI=ON` adds the GUI, which requires GLFW and OpenGL.
 
 Every file which computes in interval or affine arithmetic is compiled with

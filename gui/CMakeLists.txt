@@ -7,9 +7,12 @@ find_package(OpenGL REQUIRED)
 # editor still builds when sb2l is added as a subdirectory of a larger project.
 set(IMGUI_DIR ${PROJECT_SOURCE_DIR}/3rd/imgui)
 
-# Vendored Dear ImGui (core + GLFW/OpenGL3 backends). The opengl3 backend ships
-# its own GL loader, so no glad/glew is needed. imgui_demo.cpp is left out: the
-# editor never opens the demo window.
+# Imgui
+if(NOT EXISTS ${IMGUI_DIR}/imgui.h)
+    message(FATAL_ERROR
+        "Dear ImGui is missing from ${IMGUI_DIR}: the submodule is not checked out. "
+        "Run `git submodule update --init --recursive` and configure again.")
+endif()
 add_library(imgui STATIC
     ${IMGUI_DIR}/imgui.cpp
     ${IMGUI_DIR}/imgui_draw.cpp
