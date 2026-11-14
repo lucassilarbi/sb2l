@@ -283,6 +283,7 @@ std::vector<std::vector<ibex::Affine2>> SB2::get_adu() const
         throw std::runtime_error("Can not build an affine decomposition from an interval one");
     return adu_;
 }
+// knot vector: 0..k for a uniform curve, p+1 repeated end knots for a clamped one
 void SB2::compute_U_()
 {
     if (ct_ == CurveType::UNIFORM_RATIONAL || ct_ == CurveType::UNIFORM_NONRATIONAL)
@@ -315,6 +316,7 @@ void SB2::compute_U_()
     else
         throw std::runtime_error("The chosen curve type is not allowed");
 }
+// symbolic basis functions N_[t][s][i] (t-th derivative, segment s, control point i) by the Cox-de Boor recursion
 void SB2::compute_N_()
 {
     N_ = std::vector<std::vector<std::vector<SymEngine::Expression>>>(t_ + 2, std::vector<std::vector<SymEngine::Expression>>(nS_, std::vector<SymEngine::Expression>(n_ + 2, 0)));
@@ -350,6 +352,7 @@ void SB2::compute_N_()
             }
         }
     }
+    // rational basis: weight each function and divide by the weighted sum
     if (ct_ == CurveType::UNIFORM_RATIONAL || ct_ == CurveType::CLAMPED_RATIONAL)
     {
         buffer = std::vector<SymEngine::Expression>(nS_, 0);
@@ -368,6 +371,7 @@ void SB2::compute_N_()
             }
         }
     }
+    // Taylor form: derivatives up to order t+1 (the last one bounds the remainder)
     if (f_ == Form::TAYLOR)
     {
         for (int t = 1; t <= t_ + 1; t++)
@@ -389,7 +393,7 @@ void SB2::compute_N_()
 void SB2::compute_horner(SymEngine::Expression &expr, const int degree)
 {
     const int deg = std::max(degree, 0);
-    std::vector<SymEngine::Expression> Coefficients;
+    std::vector<SymEngine::Expression> Coefficients; // Taylor coefficients at u = 0, i.e. the polynomial coefficients
     Coefficients.push_back(expr.subs({{u_, SymEngine::Expression(0)}}));
     expr = expr.diff(u_);
     for (int i = 1; i < deg + 1; i++)
@@ -397,6 +401,7 @@ void SB2::compute_horner(SymEngine::Expression &expr, const int degree)
         Coefficients.push_back(expr.subs({{u_, SymEngine::Expression(0)}}) / SymEngine::factorial(i));
         expr = expr.diff(u_);
     }
+    // nested form c0 + u*(c1 + u*(c2 + ...)): fewer occurrences of u, tighter interval evaluation
     expr = (Coefficients[Coefficients.size() - 1]);
     for (int i = 2; i < deg + 2; i++)
     {
@@ -426,6 +431,7 @@ void SB2::compute_iN_()
         }
     }
 }
+// parameter values of each segment: d points per segment (thin intervals around k/d)
 void SB2::compute_rdu_()
 {
     rdu_ = {};
@@ -441,6 +447,7 @@ void SB2::compute_rdu_()
     rdu_[nS_-1].push_back(ibex::Interval(std::nextafter(SymEngine::eval_double(U_[n_] + SymEngine::Expression(1)), -INFINITY),
                                         std::nextafter(SymEngine::eval_double(U_[n_] + SymEngine::Expression(1)), INFINITY))); // only for real-based B-spline: a last point must be evaluated
 }
+// parameter intervals of each segment: [du/d, (du+1)/d], rounded outwards
 void SB2::compute_idu_()
 {
     idu_ = {};
@@ -454,6 +461,7 @@ void SB2::compute_idu_()
         }
     }
 }
+// same intervals as compute_idu_, as affine forms
 void SB2::compute_adu_()
 {
     adu_ = {};
@@ -480,6 +488,7 @@ int SB2::factorial(int n)
     }
     return r;
 }
+// basis functions evaluated on the parameter decomposition: point values (R)
 void SB2::compute_reBf()
 {
     reBf_ = std::vector<std::vector<std::vector<double>>>(nS_, std::vector<std::vector<double>>(n_ + 1, std::vector<double>(d_, 0.0)));
@@ -527,6 +536,7 @@ void SB2::compute_reBf()
         }
     }
 }
+// interval enclosures (IR), clipped to [0, 1], the range of a basis function
 void SB2::compute_ieBf()
 {
     ieBf_ = std::vector<std::vector<std::vector<ibex::Interval>>>(nS_, std::vector<std::vector<ibex::Interval>>(n_ + 1, std::vector<ibex::Interval>(d_, ibex::Interval(0.0))));
@@ -538,6 +548,7 @@ void SB2::compute_ieBf()
             {
                 if (f_ == Form::TAYLOR)
                 {
+                    // Taylor expansion around the interval midpoint, remainder evaluated on the whole interval
                     ibex::Interval buffer(0, 0);
                     for (int t = 0; t <= t_; t++)
                     {
@@ -554,6 +565,7 @@ void SB2::compute_ieBf()
         }
     }
 }
+// affine enclosures (Z): keep the dependency on the parameter
 void SB2::compute_aeBf()
 {
     aeBf_ = std::vector<std::vector<std::vector<ibex::Affine2>>>(nS_, std::vector<std::vector<ibex::Affine2>>(n_ + 1, std::vector<ibex::Affine2>(d_, ibex::Affine2(0.0))));
@@ -609,6 +621,7 @@ std::pair<int, int> SB2::impacted_segments(const int i) const
         return std::pair<int, int>(0, -1); // empty range: i is not a control point index
     return std::pair<int, int>(std::max(0, i - p_), std::min(nS_ - 1, i));
 }
+// C(u) = sum of P[i] * N[s][i](u) over the p+1 control points of segment s
 void SB2::eval_point_segment(const std::vector<std::vector<double>> &P, const int s, std::vector<std::vector<double>> &points)
 {
     const int nb = du_count(s);
